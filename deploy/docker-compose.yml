@@ -324,6 +324,7 @@ services:
       - TZ=${TZ:-Asia/Shanghai}
       - WATCHTOWER_SCHEDULE=0 0 5 * * *
       - WATCHTOWER_CLEANUP=true
+      - DOCKER_API_VERSION=1.44
     command: sub2api
 # =============================================================================
 # Volumes
