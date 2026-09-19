@@ -10,7 +10,7 @@
     <!-- Group name -->
     <span class="truncate">{{ name }}</span>
     <!-- Right side label -->
-    <span v-if="showLabel" :class="labelClass">
+    <span v-if="showLabel" :class="labelClass" :title="isDynamic ? t('usage.dynamicRateTitle', '动态费率（随上游成本浮动）') : undefined">
       <template v-if="hasCustomRate">
         <!-- 原倍率删除线 + 专属倍率高亮 -->
         <span class="line-through opacity-50 mr-0.5">{{ rateMultiplier }}x</span>
@@ -39,6 +39,7 @@ interface Props {
   platform?: GroupPlatform
   subscriptionType?: SubscriptionType
   rateMultiplier?: number
+  isDynamic?: boolean
   userRateMultiplier?: number | null // 用户专属倍率
   peakRateEnabled?: boolean
   peakStart?: string
@@ -59,6 +60,7 @@ const props = withDefaults(defineProps<Props>(), {
   showRate: true,
   daysRemaining: null,
   userRateMultiplier: null,
+  isDynamic: false,
   peakRateEnabled: false,
   alwaysShowRate: false
 })
@@ -105,12 +107,15 @@ const showLabel = computed(() => {
   // 订阅类型：显示天数或"订阅"
   if (isSubscription.value) return true
   // 标准类型：显示倍率（包括专属倍率）
-  return props.rateMultiplier !== undefined || hasCustomRate.value
+  return props.rateMultiplier !== undefined || hasCustomRate.value || props.isDynamic
 })
 
 // Label text
 const labelText = computed(() => {
-  const rateLabel = props.rateMultiplier !== undefined ? `${props.rateMultiplier}x` : ''
+  let rateLabel = props.rateMultiplier !== undefined ? `${props.rateMultiplier}x` : ''
+  if (props.isDynamic && !hasCustomRate.value) {
+    rateLabel = 'DYN'
+  }
   if (isSubscription.value && !props.alwaysShowRate) {
     // 如果有剩余天数，显示天数
     if (props.daysRemaining !== null && props.daysRemaining !== undefined) {
