@@ -623,6 +623,26 @@ func (_u *UsageLogUpdate) ClearAccountRateMultiplier() *UsageLogUpdate {
 	return _u
 }
 
+// SetIsDynamicRate sets the "is_dynamic_rate" field.
+func (_u *UsageLogUpdate) SetIsDynamicRate(v bool) *UsageLogUpdate {
+	_u.mutation.SetIsDynamicRate(v)
+	return _u
+}
+
+// SetNillableIsDynamicRate sets the "is_dynamic_rate" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillableIsDynamicRate(v *bool) *UsageLogUpdate {
+	if v != nil {
+		_u.SetIsDynamicRate(*v)
+	}
+	return _u
+}
+
+// ClearIsDynamicRate clears the value of the "is_dynamic_rate" field.
+func (_u *UsageLogUpdate) ClearIsDynamicRate() *UsageLogUpdate {
+	_u.mutation.ClearIsDynamicRate()
+	return _u
+}
+
 // SetBillingType sets the "billing_type" field.
 func (_u *UsageLogUpdate) SetBillingType(v int8) *UsageLogUpdate {
 	_u.mutation.ResetBillingType()
@@ -1281,6 +1301,12 @@ func (_u *UsageLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.AccountRateMultiplierCleared() {
 		_spec.ClearField(usagelog.FieldAccountRateMultiplier, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.IsDynamicRate(); ok {
+		_spec.SetField(usagelog.FieldIsDynamicRate, field.TypeBool, value)
+	}
+	if _u.mutation.IsDynamicRateCleared() {
+		_spec.ClearField(usagelog.FieldIsDynamicRate, field.TypeBool)
 	}
 	if value, ok := _u.mutation.BillingType(); ok {
 		_spec.SetField(usagelog.FieldBillingType, field.TypeInt8, value)
@@ -2137,6 +2163,26 @@ func (_u *UsageLogUpdateOne) ClearAccountRateMultiplier() *UsageLogUpdateOne {
 	return _u
 }
 
+// SetIsDynamicRate sets the "is_dynamic_rate" field.
+func (_u *UsageLogUpdateOne) SetIsDynamicRate(v bool) *UsageLogUpdateOne {
+	_u.mutation.SetIsDynamicRate(v)
+	return _u
+}
+
+// SetNillableIsDynamicRate sets the "is_dynamic_rate" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillableIsDynamicRate(v *bool) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetIsDynamicRate(*v)
+	}
+	return _u
+}
+
+// ClearIsDynamicRate clears the value of the "is_dynamic_rate" field.
+func (_u *UsageLogUpdateOne) ClearIsDynamicRate() *UsageLogUpdateOne {
+	_u.mutation.ClearIsDynamicRate()
+	return _u
+}
+
 // SetBillingType sets the "billing_type" field.
 func (_u *UsageLogUpdateOne) SetBillingType(v int8) *UsageLogUpdateOne {
 	_u.mutation.ResetBillingType()
@@ -2825,6 +2871,12 @@ func (_u *UsageLogUpdateOne) sqlSave(ctx context.Context) (_node *UsageLog, err 
 	}
 	if _u.mutation.AccountRateMultiplierCleared() {
 		_spec.ClearField(usagelog.FieldAccountRateMultiplier, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.IsDynamicRate(); ok {
+		_spec.SetField(usagelog.FieldIsDynamicRate, field.TypeBool, value)
+	}
+	if _u.mutation.IsDynamicRateCleared() {
+		_spec.ClearField(usagelog.FieldIsDynamicRate, field.TypeBool)
 	}
 	if value, ok := _u.mutation.BillingType(); ok {
 		_spec.SetField(usagelog.FieldBillingType, field.TypeInt8, value)

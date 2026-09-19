@@ -84,7 +84,7 @@ const baseProps = {
   noPricingLabel: 'No pricing',
   noModelsLabel: 'No models',
   emptyLabel: 'No channels',
-  userGroupRates: { 1: 0.8 },
+  userGroupRates: { 1: { rate_multiplier: 0.8 } },
 }
 
 function mountTable(props = {}) {
@@ -96,9 +96,15 @@ function mountTable(props = {}) {
         Icon: { props: ['name'], template: '<i :data-icon="name" />' },
         PlatformIcon: { template: '<i data-platform-icon />' },
         GroupBadge: {
-          props: ['name', 'rateMultiplier', 'userRateMultiplier'],
+          props: {
+            name: String,
+            rateMultiplier: Number,
+            userRateMultiplier: { default: null },
+            isDynamic: { default: false },
+            userRateIsDynamic: { default: false },
+          },
           template:
-            '<span data-group-badge>{{ name }}:{{ rateMultiplier }}:{{ userRateMultiplier }}</span>',
+            '<span data-group-badge>{{ name }}:{{ rateMultiplier }}:{{ userRateMultiplier }}:{{ isDynamic }}:{{ userRateIsDynamic }}</span>',
         },
         SupportedModelChip: {
           props: ['model', 'noPricingLabel'],
@@ -137,7 +143,9 @@ describe('AvailableChannelsTable responsive surfaces', () => {
     expect(mobile.text()).toContain('Models and pricing')
     expect(mobile.text()).toContain('availableChannels.exclusive')
     expect(mobile.text()).toContain('availableChannels.public')
-    expect(mobile.get('[data-group-badge]').text()).toBe('Exclusive Pro:1.2:0.8')
+    const exclusiveBadge = mobile.get('[data-group-badge]').text()
+    expect(exclusiveBadge).toContain('Exclusive Pro:1.2:0.8')
+    expect(exclusiveBadge).toContain('false:false')
     expect(mobile.findAll('[data-group-badge]')).toHaveLength(2)
     expect(mobile.get('[data-icon="clock"]')).toBeTruthy()
     expect(mobile.text()).toContain('08:00')
