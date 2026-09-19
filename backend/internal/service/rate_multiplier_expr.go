@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"log/slog"
 	"math"
 	"strconv"
 	"strings"
@@ -14,8 +15,8 @@ const maxRateMultiplierExprLen = 128
 
 // EvalRateMultiplierExpr evaluates a deliberately small arithmetic expression.
 // Supported variables:
-//   $up      selected upstream/account billing rate multiplier (canonical)
-//   $actual  compatibility alias for $up
+//
+//	$up selected upstream/account billing rate multiplier
 //
 // Supported operators are +, -, *, / and parentheses. No functions, calls,
 // property access, or arbitrary code are allowed.
@@ -31,8 +32,7 @@ func EvalRateMultiplierExpr(expr string, upstream float64) (float64, error) {
 		return 0, fmt.Errorf("upstream rate multiplier must be finite and non-negative")
 	}
 
-	normalized := strings.ReplaceAll(expr, "$actual", "up")
-	normalized = strings.ReplaceAll(normalized, "$up", "up")
+	normalized := strings.ReplaceAll(expr, "$up", "up")
 	node, err := parser.ParseExpr(normalized)
 	if err != nil {
 		return 0, fmt.Errorf("invalid rate multiplier expression: %w", err)
@@ -122,4 +122,24 @@ func ResolveRateMultiplierExpr(group *Group, resolved, upstream float64) (float6
 		return resolved, nil
 	}
 	return EvalRateMultiplierExpr(group.RateMultiplierExpr, upstream)
+}
+
+// resolveRateMultiplierExprOrLegacy keeps billing available if persisted data
+// is invalid despite save-time validation. The already-resolved legacy
+// multiplier is always the fallback.
+func resolveRateMultiplierExprOrLegacy(group *Group, resolved, upstream float64, component string) float64 {
+	value, err := ResolveRateMultiplierExpr(group, resolved, upstream)
+	if err == nil {
+		return value
+	}
+	groupID := int64(0)
+	if group != nil {
+		groupID = group.ID
+	}
+	slog.Warn("billing.rate_multiplier_expr_invalid",
+		"component", component,
+		"group_id", groupID,
+		"error", err,
+	)
+	return resolved
 }

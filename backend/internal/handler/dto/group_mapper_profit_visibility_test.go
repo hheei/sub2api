@@ -22,6 +22,7 @@ func profitControlServiceGroup() *service.Group {
 		Name:                 "profit-gated",
 		Platform:             service.PlatformAnthropic,
 		RateMultiplier:       2.0,
+		RateMultiplierExpr:   "$up * 1.05",
 		Status:               service.StatusActive,
 		ProfitControlEnabled: true,
 		ProfitMinMargin:      0.3,
@@ -57,6 +58,9 @@ func TestGroupFromServiceOmitsProfitControl(t *testing.T) {
 		if _, ok := fields["rate_multiplier"]; !ok {
 			t.Errorf("%s: 应仍返回 rate_multiplier", name)
 		}
+		if _, ok := fields["rate_multiplier_expr"]; ok {
+			t.Errorf("%s: 普通用户 DTO 不得包含 rate_multiplier_expr", name)
+		}
 	}
 }
 
@@ -65,6 +69,9 @@ func TestGroupFromServiceAdminIncludesProfitControl(t *testing.T) {
 	admin := GroupFromServiceAdmin(profitControlServiceGroup())
 	if admin.ProfitControlEnabled != true || admin.ProfitMinMargin != 0.3 || admin.ProfitSafetyBuffer != 0.05 {
 		t.Fatalf("管理员 DTO 未透传利润控制配置: %+v", admin)
+	}
+	if admin.RateMultiplierExpr != "$up * 1.05" {
+		t.Fatalf("管理员 DTO 未透传 rate_multiplier_expr: %+v", admin)
 	}
 	fields := marshalToMap(t, admin)
 	for _, f := range profitControlJSONFields {
