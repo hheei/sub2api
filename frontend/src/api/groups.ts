@@ -4,7 +4,7 @@
  */
 
 import { apiClient } from './client'
-import type { Group } from '@/types'
+import type { Group, UserGroupRateDisplay } from '@/types'
 
 /**
  * Get available groups that the current user can bind to API keys
@@ -19,11 +19,12 @@ export async function getAvailable(): Promise<Group[]> {
 }
 
 /**
- * Get current user's custom group rate multipliers
- * @returns Map of group_id to custom rate_multiplier
+ * Get current user's custom group rate multipliers.
+ * 只返回生效数值与动态标记；动态倍率的数值仅为回退值，原始表达式从不下发。
+ * @returns Map of group_id to {rate_multiplier, is_dynamic}
  */
-export async function getUserGroupRates(): Promise<Record<number, number>> {
-  const { data } = await apiClient.get<Record<number, number> | null>('/groups/rates')
+export async function getUserGroupRates(): Promise<Record<number, UserGroupRateDisplay>> {
+  const { data } = await apiClient.get<Record<number, UserGroupRateDisplay> | null>('/groups/rates')
   return data || {}
 }
 

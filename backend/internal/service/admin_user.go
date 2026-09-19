@@ -195,12 +195,18 @@ func (s *adminServiceImpl) assignDefaultSubscriptions(ctx context.Context, userI
 }
 
 func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *UpdateUserInput) (*User, error) {
-	// 校验用户专属分组倍率：必须 > 0（nil 合法，表示清除专属倍率）
+	// 校验并归一化用户专属分组倍率：数值须为有限非负数，表达式须可求值
+	// （nil 合法，表示清除该分组的专属倍率覆盖；0 是有效覆盖，不得当作"未设置"）。
 	if input.GroupRates != nil {
 		for groupID, rate := range input.GroupRates {
-			if rate != nil && *rate <= 0 {
-				return nil, fmt.Errorf("rate_multiplier must be > 0 (group_id=%d)", groupID)
+			if rate == nil {
+				continue
 			}
+			normalized := rate.Normalize()
+			if err := normalized.Validate(); err != nil {
+				return nil, infraerrors.BadRequest("INVALID_USER_GROUP_RATE", fmt.Sprintf("group_id=%d: %v", groupID, err))
+			}
+			input.GroupRates[groupID] = &normalized
 		}
 	}
 
@@ -300,7 +306,7 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 	// 同步用户专属分组倍率
 	if input.GroupRates != nil && s.userGroupRateRepo != nil {
 		if err := s.userGroupRateRepo.SyncUserGroupRates(ctx, user.ID, input.GroupRates); err != nil {
-			logger.LegacyPrintf("service.admin", "failed to sync user group rates: user_id=%d err=%v", user.ID, err)
+			return nil, fmt.Errorf("sync user group rates: %w", err)
 		}
 	}
 

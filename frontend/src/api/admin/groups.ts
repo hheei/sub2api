@@ -338,6 +338,8 @@ export interface GroupRateMultiplierEntry {
   user_status: string
   rate_multiplier?: number | null
   rpm_override?: number | null
+  /** 非空时为该用户在此分组的动态倍率表达式；rate_multiplier 为其回退值。 */
+  rate_multiplier_expr?: string
 }
 
 /**
@@ -382,7 +384,7 @@ export async function clearGroupRateMultipliers(id: number): Promise<{ message: 
  */
 export async function batchSetGroupRateMultipliers(
   id: number,
-  entries: Array<{ user_id: number; rate_multiplier: number }>
+  entries: Array<{ user_id: number; rate_multiplier: number; rate_multiplier_expr?: string }>
 ): Promise<{ message: string }> {
   const { data } = await apiClient.put<{ message: string }>(
     `/admin/groups/${id}/rate-multipliers`,

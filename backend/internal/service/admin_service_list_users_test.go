@@ -60,13 +60,13 @@ type userGroupRateRepoStubForListUsers struct {
 	singleCall []int64
 
 	batchErr  error
-	batchData map[int64]map[int64]float64
+	batchData map[int64]map[int64]UserGroupRate
 
 	singleErr  map[int64]error
-	singleData map[int64]map[int64]float64
+	singleData map[int64]map[int64]UserGroupRate
 }
 
-func (s *userGroupRateRepoStubForListUsers) GetByUserIDs(_ context.Context, _ []int64) (map[int64]map[int64]float64, error) {
+func (s *userGroupRateRepoStubForListUsers) GetByUserIDs(_ context.Context, _ []int64) (map[int64]map[int64]UserGroupRate, error) {
 	s.batchCalls++
 	if s.batchErr != nil {
 		return nil, s.batchErr
@@ -74,7 +74,7 @@ func (s *userGroupRateRepoStubForListUsers) GetByUserIDs(_ context.Context, _ []
 	return s.batchData, nil
 }
 
-func (s *userGroupRateRepoStubForListUsers) GetByUserID(_ context.Context, userID int64) (map[int64]float64, error) {
+func (s *userGroupRateRepoStubForListUsers) GetByUserID(_ context.Context, userID int64) (map[int64]UserGroupRate, error) {
 	s.singleCall = append(s.singleCall, userID)
 	if err, ok := s.singleErr[userID]; ok {
 		return nil, err
@@ -82,10 +82,10 @@ func (s *userGroupRateRepoStubForListUsers) GetByUserID(_ context.Context, userI
 	if rates, ok := s.singleData[userID]; ok {
 		return rates, nil
 	}
-	return map[int64]float64{}, nil
+	return map[int64]UserGroupRate{}, nil
 }
 
-func (s *userGroupRateRepoStubForListUsers) GetByUserAndGroup(_ context.Context, userID, groupID int64) (*float64, error) {
+func (s *userGroupRateRepoStubForListUsers) GetByUserAndGroup(_ context.Context, userID, groupID int64) (*UserGroupRate, error) {
 	panic("unexpected GetByUserAndGroup call")
 }
 
@@ -93,7 +93,7 @@ func (s *userGroupRateRepoStubForListUsers) GetRPMOverrideByUserAndGroup(_ conte
 	panic("unexpected GetRPMOverrideByUserAndGroup call")
 }
 
-func (s *userGroupRateRepoStubForListUsers) SyncUserGroupRates(_ context.Context, userID int64, rates map[int64]*float64) error {
+func (s *userGroupRateRepoStubForListUsers) SyncUserGroupRates(_ context.Context, userID int64, rates map[int64]*UserGroupRate) error {
 	panic("unexpected SyncUserGroupRates call")
 }
 
@@ -130,9 +130,9 @@ func TestAdminService_ListUsers_BatchRateFallbackToSingle(t *testing.T) {
 	}
 	rateRepo := &userGroupRateRepoStubForListUsers{
 		batchErr: errors.New("batch unavailable"),
-		singleData: map[int64]map[int64]float64{
-			101: {11: 1.1},
-			202: {22: 2.2},
+		singleData: map[int64]map[int64]UserGroupRate{
+			101: {11: {RateMultiplier: 1.1}},
+			202: {22: {RateMultiplier: 2.2}},
 		},
 	}
 	svc := &adminServiceImpl{
@@ -146,8 +146,8 @@ func TestAdminService_ListUsers_BatchRateFallbackToSingle(t *testing.T) {
 	require.Len(t, users, 2)
 	require.Equal(t, 1, rateRepo.batchCalls)
 	require.ElementsMatch(t, []int64{101, 202}, rateRepo.singleCall)
-	require.Equal(t, 1.1, users[0].GroupRates[11])
-	require.Equal(t, 2.2, users[1].GroupRates[22])
+	require.Equal(t, 1.1, users[0].GroupRates[11].RateMultiplier)
+	require.Equal(t, 2.2, users[1].GroupRates[22].RateMultiplier)
 }
 
 func TestAdminService_ListUsers_PassesSortParams(t *testing.T) {

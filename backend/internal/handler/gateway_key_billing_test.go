@@ -25,11 +25,14 @@ type keyBillingUserGroupRateRepo struct {
 	lookupCalls int
 }
 
-func (r *keyBillingUserGroupRateRepo) GetByUserAndGroup(_ context.Context, userID, groupID int64) (*float64, error) {
+func (r *keyBillingUserGroupRateRepo) GetByUserAndGroup(_ context.Context, userID, groupID int64) (*service.UserGroupRate, error) {
 	r.gotUserID = userID
 	r.gotGroupID = groupID
 	r.lookupCalls++
-	return r.rate, r.err
+	if r.rate == nil {
+		return nil, r.err
+	}
+	return &service.UserGroupRate{RateMultiplier: *r.rate}, r.err
 }
 
 func newKeyBillingHandler(repo service.UserGroupRateRepository) *GatewayHandler {
@@ -111,28 +114,27 @@ func TestGatewayHandlerKeyBillingInfoUsesGroupRate(t *testing.T) {
 }
 
 func TestGatewayHandlerKeyBillingInfoUsesUserOverride(t *testing.T) {
-	groupID := int64(7)
-	userRate := 0.5
-	apiKey := &service.APIKey{
-		UserID:  11,
-		GroupID: &groupID,
-		Group:   &service.Group{ID: groupID, RateMultiplier: 0.75},
+	for _, userRate := range []float64{0.5, 0, 0.75} {
+		groupID := int64(7)
+		apiKey := &service.APIKey{
+			UserID: 11, GroupID: &groupID,
+			Group: &service.Group{ID: groupID, RateMultiplier: 0.75, RateMultiplierExpr: "$up * 1.05"},
+		}
+		c, w := newKeyBillingContext(apiKey)
+		repo := &keyBillingUserGroupRateRepo{rate: &userRate}
+		newKeyBillingHandler(repo).KeyBillingInfo(c)
+		require.Equal(t, http.StatusOK, w.Code)
+		require.Equal(t, 1, repo.lookupCalls)
+		require.Equal(t, apiKey.UserID, repo.gotUserID)
+		require.Equal(t, groupID, repo.gotGroupID)
+		var got keyBillingInfoResponse
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+		require.NotNil(t, got.UserRateMultiplier)
+		require.Equal(t, userRate, *got.UserRateMultiplier)
+		require.Equal(t, userRate, got.ResolvedRateMultiplier)
+		require.Equal(t, userRate, got.EffectiveRateMultiplier)
+		require.NotContains(t, w.Body.String(), "$up")
 	}
-	c, w := newKeyBillingContext(apiKey)
-	repo := &keyBillingUserGroupRateRepo{rate: &userRate}
-
-	newKeyBillingHandler(repo).KeyBillingInfo(c)
-
-	require.Equal(t, http.StatusOK, w.Code)
-	require.Equal(t, 1, repo.lookupCalls)
-	require.Equal(t, apiKey.UserID, repo.gotUserID)
-	require.Equal(t, groupID, repo.gotGroupID)
-	var got keyBillingInfoResponse
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
-	require.NotNil(t, got.UserRateMultiplier)
-	require.Equal(t, 0.5, *got.UserRateMultiplier)
-	require.Equal(t, 0.5, got.ResolvedRateMultiplier)
-	require.Equal(t, 0.5, got.EffectiveRateMultiplier)
 }
 
 func TestBuildKeyBillingInfoAppliesPeakMultiplier(t *testing.T) {
@@ -152,7 +154,7 @@ func TestBuildKeyBillingInfoAppliesPeakMultiplier(t *testing.T) {
 	now := time.Date(2026, time.July, 12, 10, 0, 0, 0, timezone.Location())
 	userRate := 0.8
 
-	got := buildKeyBillingInfo(apiKey, userRate, now)
+	got := buildKeyBillingInfo(apiKey, userRate, true, now)
 
 	require.Equal(t, 1.2, got.GroupRateMultiplier)
 	require.NotNil(t, got.UserRateMultiplier)
@@ -202,7 +204,7 @@ func TestKeyBillingInfoJSONKeepsZeroPeakMultiplierWhenEnabled(t *testing.T) {
 		},
 	}
 	now := time.Date(2026, time.July, 12, 12, 0, 0, 0, timezone.Location())
-	encoded, err := json.Marshal(buildKeyBillingInfo(apiKey, apiKey.Group.RateMultiplier, now))
+	encoded, err := json.Marshal(buildKeyBillingInfo(apiKey, apiKey.Group.RateMultiplier, false, now))
 	require.NoError(t, err)
 
 	var fields map[string]json.RawMessage
@@ -281,11 +283,13 @@ func TestGatewayHandlerKeyBillingInfoSharesBillingResolverCacheByPlatform(t *tes
 				},
 			}
 
+			var cachedRate float64
 			if tc.openAI {
-				require.Equal(t, oldRate, openAIGatewayService.ResolveUserGroupRateMultiplier(context.Background(), apiKey.UserID, groupID, apiKey.Group.RateMultiplier))
+				cachedRate, _ = openAIGatewayService.ResolveEffectiveRate(context.Background(), apiKey.UserID, groupID, apiKey.Group, 1)
 			} else {
-				require.Equal(t, oldRate, gatewayService.ResolveUserGroupRateMultiplier(context.Background(), apiKey.UserID, groupID, apiKey.Group.RateMultiplier))
+				cachedRate, _ = gatewayService.ResolveEffectiveRate(context.Background(), apiKey.UserID, groupID, apiKey.Group, 1)
 			}
+			require.Equal(t, oldRate, cachedRate)
 			repo.rate = &newRate
 
 			for range 2 {
@@ -300,9 +304,9 @@ func TestGatewayHandlerKeyBillingInfoSharesBillingResolverCacheByPlatform(t *tes
 
 			var billedRate float64
 			if tc.openAI {
-				billedRate = openAIGatewayService.ResolveUserGroupRateMultiplier(context.Background(), apiKey.UserID, groupID, apiKey.Group.RateMultiplier)
+				billedRate, _ = openAIGatewayService.ResolveEffectiveRate(context.Background(), apiKey.UserID, groupID, apiKey.Group, 1)
 			} else {
-				billedRate = gatewayService.ResolveUserGroupRateMultiplier(context.Background(), apiKey.UserID, groupID, apiKey.Group.RateMultiplier)
+				billedRate, _ = gatewayService.ResolveEffectiveRate(context.Background(), apiKey.UserID, groupID, apiKey.Group, 1)
 			}
 			require.Equal(t, oldRate, billedRate)
 			require.Equal(t, 1, repo.lookupCalls)

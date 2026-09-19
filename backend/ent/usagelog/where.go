@@ -205,6 +205,11 @@ func AccountRateMultiplier(v float64) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldAccountRateMultiplier, v))
 }
 
+// IsDynamicRate applies equality check predicate on the "is_dynamic_rate" field. It's identical to IsDynamicRateEQ.
+func IsDynamicRate(v bool) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldIsDynamicRate, v))
+}
+
 // BillingType applies equality check predicate on the "billing_type" field. It's identical to BillingTypeEQ.
 func BillingType(v int8) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldBillingType, v))
@@ -1633,6 +1638,26 @@ func AccountRateMultiplierIsNil() predicate.UsageLog {
 // AccountRateMultiplierNotNil applies the NotNil predicate on the "account_rate_multiplier" field.
 func AccountRateMultiplierNotNil() predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldNotNull(FieldAccountRateMultiplier))
+}
+
+// IsDynamicRateEQ applies the EQ predicate on the "is_dynamic_rate" field.
+func IsDynamicRateEQ(v bool) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldIsDynamicRate, v))
+}
+
+// IsDynamicRateNEQ applies the NEQ predicate on the "is_dynamic_rate" field.
+func IsDynamicRateNEQ(v bool) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNEQ(FieldIsDynamicRate, v))
+}
+
+// IsDynamicRateIsNil applies the IsNil predicate on the "is_dynamic_rate" field.
+func IsDynamicRateIsNil() predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldIsNull(FieldIsDynamicRate))
+}
+
+// IsDynamicRateNotNil applies the NotNil predicate on the "is_dynamic_rate" field.
+func IsDynamicRateNotNil() predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNotNull(FieldIsDynamicRate))
 }
 
 // BillingTypeEQ applies the EQ predicate on the "billing_type" field.

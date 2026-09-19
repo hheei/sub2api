@@ -98,26 +98,75 @@ func TestGroupAndUsageLogDynamicRateFlags(t *testing.T) {
 		t.Fatal("Group without rate_multiplier_expr should have IsDynamic=false")
 	}
 
-	logDynamic := &service.UsageLog{
+}
+
+// TestUsageLogDynamicRateComesFromStoredFlag 钉死 is_dynamic_rate 是行内快照：
+// 只读 stored 字段，历史行（nil）保持未知，绝不从当前（可变）分组配置反推。
+func TestUsageLogDynamicRateComesFromStoredFlag(t *testing.T) {
+	flagTrue := true
+	flagFalse := false
+
+	// 分组是动态的，但落库标记说这次不是 —— 必须以落库为准。
+	storedFalse := &service.UsageLog{
 		ID:             100,
 		RateMultiplier: 0.63,
-		Group:          dynamicGroup,
+		IsDynamicRate:  &flagFalse,
+		Group:          profitControlServiceGroup(),
 	}
-	dtoLogDynamic := UsageLogFromService(logDynamic)
-	if !dtoLogDynamic.IsDynamicRate {
-		t.Fatal("UsageLog with dynamic group should have IsDynamicRate=true")
+	dtoStoredFalse := UsageLogFromService(storedFalse)
+	if dtoStoredFalse.IsDynamicRate == nil || *dtoStoredFalse.IsDynamicRate {
+		t.Fatal("stored false must win over a dynamic group")
 	}
-	if dtoLogDynamic.RateMultiplier != 0.63 {
-		t.Fatalf("UsageLog should preserve actual rate multiplier, got %v", dtoLogDynamic.RateMultiplier)
+	if dtoStoredFalse.RateMultiplier != 0.63 {
+		t.Fatalf("UsageLog should preserve actual rate multiplier, got %v", dtoStoredFalse.RateMultiplier)
 	}
 
-	logStatic := &service.UsageLog{
+	// 分组是静态的（甚至分组已被删除），但落库标记说这次是动态的。
+	storedTrue := &service.UsageLog{
 		ID:             101,
 		RateMultiplier: 1.5,
-		Group:          staticGroup,
+		IsDynamicRate:  &flagTrue,
+		Group:          &service.Group{ID: 8, Name: "static-group", RateMultiplier: 1.5},
 	}
-	dtoLogStatic := UsageLogFromService(logStatic)
-	if dtoLogStatic.IsDynamicRate {
-		t.Fatal("UsageLog with static group should have IsDynamicRate=false")
+	dtoStoredTrue := UsageLogFromService(storedTrue)
+	if dtoStoredTrue.IsDynamicRate == nil || !*dtoStoredTrue.IsDynamicRate {
+		t.Fatal("stored true must win over a static group")
+	}
+
+	deletedGroup := &service.UsageLog{
+		ID:             102,
+		RateMultiplier: 1.5,
+		IsDynamicRate:  &flagTrue,
+	}
+	if dtoDeleted := UsageLogFromService(deletedGroup); dtoDeleted.IsDynamicRate == nil || !*dtoDeleted.IsDynamicRate {
+		t.Fatal("a deleted group must not clear the stored flag")
+	}
+
+	// 历史行：无 stored 值 → 未知，且不得由当前动态分组推断为 true。
+	legacy := &service.UsageLog{
+		ID:             103,
+		RateMultiplier: 0.63,
+		Group:          profitControlServiceGroup(),
+	}
+	dtoLegacy := UsageLogFromService(legacy)
+	if dtoLegacy.IsDynamicRate != nil {
+		t.Fatalf("historical row must stay unknown, got %v", *dtoLegacy.IsDynamicRate)
+	}
+	if raw := marshalToMap(t, dtoLegacy); raw["is_dynamic_rate"] != nil {
+		t.Fatalf("unknown is_dynamic_rate must be omitted from JSON, got %v", raw["is_dynamic_rate"])
+	}
+
+	// false 必须显式出现在 JSON 中，不能因 omitempty 丢失。
+	if raw := marshalToMap(t, dtoStoredFalse); raw["is_dynamic_rate"] != false {
+		t.Fatalf("explicit false must be serialized, got %v", raw["is_dynamic_rate"])
+	}
+
+	adminDynamic := UsageLogFromServiceAdmin(storedTrue)
+	if adminDynamic.IsDynamicRate == nil || !*adminDynamic.IsDynamicRate {
+		t.Fatal("admin DTO must expose the stored flag")
+	}
+	adminLegacy := UsageLogFromServiceAdmin(legacy)
+	if adminLegacy.IsDynamicRate != nil {
+		t.Fatal("admin DTO must keep historical rows unknown")
 	}
 }

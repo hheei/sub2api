@@ -121,6 +121,13 @@ func (UsageLog) Fields() []ent.Field {
 			Nillable().
 			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}),
 
+		// is_dynamic_rate: 本次请求的生效倍率是否来自动态表达式（$up）。
+		// NULL 表示历史行，未知；绝不由当前分组配置反推。
+		field.Bool("is_dynamic_rate").
+			Optional().
+			Nillable().
+			Comment("Whether the effective rate multiplier came from a dynamic expression; NULL = unknown historical row"),
+
 		// 其他字段
 		field.Int8("billing_type").
 			Default(0),

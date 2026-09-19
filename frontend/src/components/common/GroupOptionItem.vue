@@ -25,14 +25,17 @@
     <!-- Right: rate pill + checkmark (vertically centered to first row) -->
     <div class="flex shrink-0 items-center gap-2 pt-0.5">
       <div class="flex shrink-0 flex-col items-end gap-1">
-        <!-- Rate pill (platform color) -->
-        <span v-if="rateMultiplier !== undefined" :class="['inline-flex items-center whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold', ratePillClass]">
-          <template v-if="hasCustomRate">
+        <!-- Rate pill (platform color)：专属倍率存在即覆盖分组来源（0 与相等值同样覆盖） -->
+        <span v-if="rateMultiplier !== undefined || hasCustomRate" :class="['inline-flex items-center whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold', ratePillClass]" :title="ratePillTitle">
+          <template v-if="showsDefaultStrike">
             <span class="mr-1 line-through opacity-50">{{ rateMultiplier }}x</span>
-            <span class="font-bold">{{ userRateMultiplier }}x</span>
+            <span class="font-bold">{{ customLabel }}</span>
+          </template>
+          <template v-else-if="hasCustomRate">
+            <span class="font-bold">{{ customLabel }}</span>
           </template>
           <template v-else>
-            {{ rateMultiplier }}x {{ t('admin.groups.rateLabel') }}
+            {{ effectiveDefaultLabel }}
           </template>
         </span>
         <span
@@ -74,6 +77,10 @@ interface Props {
   subscriptionType?: SubscriptionType
   rateMultiplier?: number
   userRateMultiplier?: number | null
+  /** 分组默认倍率来自表达式。 */
+  isDynamic?: boolean
+  /** 用户专属倍率为表达式；userRateMultiplier 仅为其回退/展示值。 */
+  userRateIsDynamic?: boolean
   peakRateEnabled?: boolean
   peakStart?: string
   peakEnd?: string
@@ -88,17 +95,54 @@ const props = withDefaults(defineProps<Props>(), {
   selected: false,
   showCheckmark: true,
   userRateMultiplier: null,
+  isDynamic: false,
+  userRateIsDynamic: false,
   peakRateEnabled: false
 })
 
-// Whether user has a custom rate different from default
+// 是否有专属倍率覆盖：只要求"有值"，相等或为 0 同样是覆盖。
 const hasCustomRate = computed(() => {
+  return props.userRateMultiplier !== null && props.userRateMultiplier !== undefined
+})
+
+// 专属倍率来自表达式时数值只是回退值，展示 DYN。
+const customIsDynamic = computed(() => hasCustomRate.value && props.userRateIsDynamic === true)
+
+// 分组默认倍率来自表达式。
+const groupIsDynamic = computed(() => props.isDynamic === true)
+
+// 生效来源的动态标记：有专属覆盖只看专属，没有才回落到分组。
+const effectiveIsDynamic = computed(() =>
+  hasCustomRate.value ? customIsDynamic.value : groupIsDynamic.value
+)
+
+const showsDefaultStrike = computed(() => {
   return (
-    props.userRateMultiplier !== null &&
-    props.userRateMultiplier !== undefined &&
+    hasCustomRate.value &&
     props.rateMultiplier !== undefined &&
-    props.userRateMultiplier !== props.rateMultiplier
+    (customIsDynamic.value || props.userRateMultiplier !== props.rateMultiplier)
   )
+})
+
+const customLabel = computed(() =>
+  customIsDynamic.value ? t('usage.dynamicRate') : `${props.userRateMultiplier}x`
+)
+
+const effectiveDefaultLabel = computed(() =>
+  groupIsDynamic.value
+    ? t('usage.dynamicRate')
+    : `${props.rateMultiplier}x ${t('admin.groups.rateLabel')}`
+)
+
+const ratePillTitle = computed(() => {
+  if (!hasCustomRate.value) {
+    return effectiveIsDynamic.value
+      ? t('usage.dynamicRateTitle')
+      : t('common.rateSourceGroup')
+  }
+  return customIsDynamic.value
+    ? t('common.rateSourceCustomDynamic')
+    : t('common.rateSourceCustom')
 })
 
 const appStore = useAppStore()

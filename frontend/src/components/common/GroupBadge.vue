@@ -10,11 +10,14 @@
     <!-- Group name -->
     <span class="truncate">{{ name }}</span>
     <!-- Right side label -->
-    <span v-if="showLabel" :class="labelClass" :title="isDynamic ? t('usage.dynamicRateTitle', '动态费率（随上游成本浮动）') : undefined">
-      <template v-if="hasCustomRate">
-        <!-- 原倍率删除线 + 专属倍率高亮 -->
+    <span v-if="showLabel" :class="labelClass" :title="rateTitle">
+      <!-- 专属倍率存在（含 0 与等于分组默认值）即覆盖分组来源；专属为表达式时只展示 DYN，不把回退数值当最终值 -->
+      <template v-if="showsDefaultStrike">
         <span class="line-through opacity-50 mr-0.5">{{ rateMultiplier }}x</span>
-        <span class="font-bold">{{ userRateMultiplier }}x</span>
+        <span class="font-bold">{{ customLabel }}</span>
+      </template>
+      <template v-else-if="hasCustomRate">
+        <span class="font-bold">{{ customLabel }}</span>
       </template>
       <template v-else>
         {{ labelText }}
@@ -40,7 +43,8 @@ interface Props {
   subscriptionType?: SubscriptionType
   rateMultiplier?: number
   isDynamic?: boolean
-  userRateMultiplier?: number | null // 用户专属倍率
+  userRateMultiplier?: number | null // 用户专属倍率（0 也算覆盖）
+  userRateIsDynamic?: boolean // 用户专属倍率为表达式；数值仅为其回退/展示值
   peakRateEnabled?: boolean
   peakStart?: string
   peakEnd?: string
@@ -61,6 +65,7 @@ const props = withDefaults(defineProps<Props>(), {
   daysRemaining: null,
   userRateMultiplier: null,
   isDynamic: false,
+  userRateIsDynamic: false,
   peakRateEnabled: false,
   alwaysShowRate: false
 })
@@ -69,14 +74,45 @@ const { t } = useI18n()
 
 const isSubscription = computed(() => props.subscriptionType === 'subscription')
 
-// 是否有专属倍率（且与默认倍率不同）
+// 是否存在专属倍率覆盖：只要求"有值"，相等或为 0 同样是覆盖，
+// 否则静态专属倍率会被分组动态表达式错误地顶掉。
 const hasCustomRate = computed(() => {
+  return props.userRateMultiplier !== null && props.userRateMultiplier !== undefined
+})
+
+// 专属倍率是否来自表达式；为真时数值仅为回退值，不可作为最终倍率展示。
+const customIsDynamic = computed(() => hasCustomRate.value && props.userRateIsDynamic === true)
+
+// 生效来源的动态标记：有专属覆盖只看专属，没有才回落到分组。
+const effectiveIsDynamic = computed(() =>
+  hasCustomRate.value ? props.userRateIsDynamic === true : props.isDynamic === true
+)
+
+// 分组默认倍率是否值得划线展示（与专属值不同，或专属为表达式时无固定值可比）。
+const showsDefaultStrike = computed(() => {
   return (
-    props.userRateMultiplier !== null &&
-    props.userRateMultiplier !== undefined &&
+    hasCustomRate.value &&
     props.rateMultiplier !== undefined &&
-    props.userRateMultiplier !== props.rateMultiplier
+    (customIsDynamic.value || props.userRateMultiplier !== props.rateMultiplier)
   )
+})
+
+// 专属倍率的展示文本：表达式只显示 DYN。
+const customLabel = computed(() => {
+  if (customIsDynamic.value) return t('usage.dynamicRate')
+  return `${props.userRateMultiplier}x`
+})
+
+// 标签 tooltip：说明最终生效来源。
+const rateTitle = computed(() => {
+  if (!hasCustomRate.value) {
+    return effectiveIsDynamic.value
+      ? t('usage.dynamicRateTitle', '动态费率（随上游成本浮动）')
+      : t('common.rateSourceGroup', '套餐倍率')
+  }
+  return customIsDynamic.value
+    ? t('common.rateSourceCustomDynamic', '专属动态倍率（优先于分组倍率，随上游成本浮动）')
+    : t('common.rateSourceCustom', '专属倍率（优先于分组倍率）')
 })
 
 const appStore = useAppStore()
@@ -110,11 +146,14 @@ const showLabel = computed(() => {
   return props.rateMultiplier !== undefined || hasCustomRate.value || props.isDynamic
 })
 
+// 分组自带的动态标记（无专属覆盖时生效）
+const groupIsDynamic = computed(() => props.isDynamic === true)
+
 // Label text
 const labelText = computed(() => {
   let rateLabel = props.rateMultiplier !== undefined ? `${props.rateMultiplier}x` : ''
-  if (props.isDynamic && !hasCustomRate.value) {
-    rateLabel = 'DYN'
+  if (groupIsDynamic.value) {
+    rateLabel = t('usage.dynamicRate')
   }
   if (isSubscription.value && !props.alwaysShowRate) {
     // 如果有剩余天数，显示天数

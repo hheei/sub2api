@@ -53,6 +53,6 @@ describe('GroupRateMultipliersModal new override validation', () => {
     await wrapper.findAll('button').find(b => b.text() === 'common.add')!.trigger('click')
     await wrapper.findAll('button').find(b => b.text() === 'common.save')!.trigger('click')
     await flushPromises()
-    expect(mocks.batchSetGroupRateMultipliers).toHaveBeenCalledWith(1, [{ user_id: 7, rate_multiplier: value }])
+    expect(mocks.batchSetGroupRateMultipliers).toHaveBeenCalledWith(1, [{ user_id: 7, rate_multiplier: value, rate_multiplier_expr: '' }])
   })
 })
