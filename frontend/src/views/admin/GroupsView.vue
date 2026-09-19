@@ -628,7 +628,7 @@
             required
             class="input font-mono"
             data-tour="group-form-multiplier"
-            :placeholder="t('admin.groups.modal.rateMultiplierPlaceholder')"
+            :placeholder="t('admin.groups.form.rateMultiplierPlaceholder')"
           />
           <p class="input-hint">{{ t("admin.groups.rateMultiplierHint") }}</p>
         </div>
@@ -2280,7 +2280,7 @@
             required
             class="input font-mono"
             data-tour="group-form-multiplier"
-            :placeholder="t('admin.groups.modal.rateMultiplierPlaceholder')"
+            :placeholder="t('admin.groups.form.rateMultiplierPlaceholder')"
           />
           <p class="input-hint">{{ t("admin.groups.rateMultiplierHint") }}</p>
         </div>
