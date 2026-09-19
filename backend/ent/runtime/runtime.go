@@ -1045,6 +1045,10 @@ func init() {
 	groupDescRateMultiplier := groupFields[3].Descriptor()
 	// group.DefaultRateMultiplier holds the default value on creation for the rate_multiplier field.
 	group.DefaultRateMultiplier = groupDescRateMultiplier.Default.(float64)
+	// groupDescRateMultiplierExpr is the schema descriptor for rate_multiplier_expr field.
+	groupDescRateMultiplierExpr := groupFields[3].Descriptor()
+	// group.DefaultRateMultiplierExpr holds the default value on creation for the rate_multiplier_expr field.
+	group.DefaultRateMultiplierExpr = groupDescRateMultiplierExpr.Default.(string)
 	// groupDescPeakRateEnabled is the schema descriptor for peak_rate_enabled field.
 	groupDescPeakRateEnabled := groupFields[4].Descriptor()
 	// group.DefaultPeakRateEnabled holds the default value on creation for the peak_rate_enabled field.
