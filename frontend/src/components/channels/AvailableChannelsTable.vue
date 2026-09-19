@@ -101,6 +101,7 @@
                     :subscription-type="(g.subscription_type || 'standard') as SubscriptionType"
                     :rate-multiplier="g.rate_multiplier"
                     :user-rate-multiplier="userGroupRates[g.id] ?? null"
+                    :is-dynamic="g.is_dynamic"
                     always-show-rate
                   />
                   <span
@@ -136,6 +137,7 @@
                     :rate-multiplier="g.rate_multiplier"
                     :user-rate-multiplier="userGroupRates[g.id] ?? null"
                     always-show-rate
+                    :is-dynamic="g.is_dynamic"
                   />
                   <span
                     v-if="hasPeakRate(g)"
@@ -241,6 +243,7 @@
                         :rate-multiplier="g.rate_multiplier"
                         :user-rate-multiplier="userGroupRates[g.id] ?? null"
                         always-show-rate
+                        :is-dynamic="g.is_dynamic"
                       />
                       <span
                         v-if="hasPeakRate(g)"
@@ -275,6 +278,7 @@
                         :subscription-type="(g.subscription_type || 'standard') as SubscriptionType"
                         :rate-multiplier="g.rate_multiplier"
                         :user-rate-multiplier="userGroupRates[g.id] ?? null"
+                        :is-dynamic="g.is_dynamic"
                         always-show-rate
                       />
                       <span
