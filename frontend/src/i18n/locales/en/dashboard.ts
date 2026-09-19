@@ -330,6 +330,8 @@ export default {
     cacheTtlOverriddenLabel: 'TTL Override',
     cacheTtlOverridden5m: 'Billed as 5m',
     cacheTtlOverridden1h: 'Billed as 1h',
+    dynamicRate: 'DYN',
+    dynamicRateTitle: 'Dynamic Rate (tracks upstream cost)',
     totalRequests: 'Total Requests',
     totalTokens: 'Total Tokens',
     cacheTotal: 'Cache',

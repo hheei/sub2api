@@ -335,6 +335,8 @@ export default {
     cacheTtlOverriddenLabel: 'TTL 替换',
     cacheTtlOverridden5m: '按 5m 计费',
     cacheTtlOverridden1h: '按 1h 计费',
+    dynamicRate: 'DYN',
+    dynamicRateTitle: '动态费率（随上游成本浮动）',
     totalRequests: '总请求数',
     totalTokens: '总 Token',
     cacheTotal: '缓存',

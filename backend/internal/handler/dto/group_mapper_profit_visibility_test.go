@@ -80,3 +80,44 @@ func TestGroupFromServiceAdminIncludesProfitControl(t *testing.T) {
 		}
 	}
 }
+
+func TestGroupAndUsageLogDynamicRateFlags(t *testing.T) {
+	dynamicGroup := profitControlServiceGroup()
+	dtoGroup := GroupFromService(dynamicGroup)
+	if !dtoGroup.IsDynamic {
+		t.Fatal("Group with rate_multiplier_expr should have IsDynamic=true")
+	}
+
+	staticGroup := &service.Group{
+		ID:             8,
+		Name:           "static-group",
+		RateMultiplier: 1.5,
+	}
+	dtoStaticGroup := GroupFromService(staticGroup)
+	if dtoStaticGroup.IsDynamic {
+		t.Fatal("Group without rate_multiplier_expr should have IsDynamic=false")
+	}
+
+	logDynamic := &service.UsageLog{
+		ID:             100,
+		RateMultiplier: 0.63,
+		Group:          dynamicGroup,
+	}
+	dtoLogDynamic := UsageLogFromService(logDynamic)
+	if !dtoLogDynamic.IsDynamicRate {
+		t.Fatal("UsageLog with dynamic group should have IsDynamicRate=true")
+	}
+	if dtoLogDynamic.RateMultiplier != 0.63 {
+		t.Fatalf("UsageLog should preserve actual rate multiplier, got %v", dtoLogDynamic.RateMultiplier)
+	}
+
+	logStatic := &service.UsageLog{
+		ID:             101,
+		RateMultiplier: 1.5,
+		Group:          staticGroup,
+	}
+	dtoLogStatic := UsageLogFromService(logStatic)
+	if dtoLogStatic.IsDynamicRate {
+		t.Fatal("UsageLog with static group should have IsDynamicRate=false")
+	}
+}
