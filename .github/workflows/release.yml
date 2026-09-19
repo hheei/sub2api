@@ -14,7 +14,7 @@ on:
         description: 'Simple release: only x86_64 GHCR image, skip other artifacts'
         required: false
         type: boolean
-        default: false
+        default: true
       dry_run:
         description: 'Build and verify all selected artifacts without publishing'
         required: false
@@ -29,7 +29,7 @@ permissions:
   contents: read
 
 env:
-  SIMPLE_RELEASE: ${{ inputs.simple_release == true || vars.SIMPLE_RELEASE == 'true' }}
+  SIMPLE_RELEASE: ${{ inputs.simple_release != false && vars.SIMPLE_RELEASE != 'false' }}
   DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true }}
 
 jobs:
