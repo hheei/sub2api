@@ -53,7 +53,9 @@
                   :platform="k.group.platform"
                   :subscription-type="k.group.subscription_type"
                   :rate-multiplier="k.group.rate_multiplier"
-                  :user-rate-multiplier="userGroupRates[k.group.id]"
+                  :user-rate-multiplier="userGroupRates[k.group.id]?.rate_multiplier ?? null"
+                  :user-rate-is-dynamic="userGroupRates[k.group.id]?.is_dynamic === true"
+                  :is-dynamic="k.group.is_dynamic"
                 />
                 <span v-else class="text-xs text-gray-400">—</span>
               </td>
@@ -75,7 +77,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { ApiKey } from '@/types'
+import type { ApiKey, UserGroupRateDisplay } from '@/types'
 import type { Provider } from '@/api/admin/channelMonitor'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import GroupBadge from '@/components/common/GroupBadge.vue'
@@ -86,7 +88,7 @@ const props = withDefaults(defineProps<{
   loading: boolean
   keys: ApiKey[]
   provider: Provider
-  userGroupRates?: Record<number, number>
+  userGroupRates?: Record<number, UserGroupRateDisplay>
 }>(), {
   userGroupRates: () => ({}),
 })

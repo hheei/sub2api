@@ -250,7 +250,7 @@ import type {
   UpdateParams,
 } from '@/api/admin/channelMonitor'
 import type { ChannelMonitorTemplate } from '@/api/admin/channelMonitorTemplate'
-import type { ApiKey } from '@/types'
+import type { ApiKey, UserGroupRateDisplay } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Toggle from '@/components/common/Toggle.vue'
 import Select from '@/components/common/Select.vue'
@@ -316,7 +316,7 @@ const submitting = ref(false)
 const showKeyPicker = ref(false)
 const myKeysLoading = ref(false)
 const myActiveKeys = ref<ApiKey[]>([])
-const userGroupRates = ref<Record<number, number>>({})
+const userGroupRates = ref<Record<number, UserGroupRateDisplay>>({})
 
 interface MonitorForm {
   name: string

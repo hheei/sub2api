@@ -84,7 +84,7 @@ func TestBatchImagePublicService_Submit(t *testing.T) {
 		require.Equal(t, "files/gemini_api/output", batchImageDerefString(job.ProviderOutputRef))
 		require.NotNil(t, job.AccountID)
 		require.Equal(t, int64(101), *job.AccountID)
-		require.Equal(t, 1, job.PricingSnapshotVersion)
+		require.Equal(t, 2, job.PricingSnapshotVersion)
 		require.InDelta(t, 0.25, job.BaseUnitPrice, 1e-12)
 		require.InDelta(t, 1.0, job.GroupRateMultiplier, 1e-12)
 		require.InDelta(t, 1.0, job.AccountRateMultiplier, 1e-12)
@@ -113,8 +113,7 @@ func TestBatchImagePublicService_Submit(t *testing.T) {
 				BatchImageHoldMultiplier:     0.6,
 			},
 		}}
-		userRate := 0.5
-		svc.UserGroupRateRepo = &publicBatchImageUserGroupRateRepo{rates: map[int64]*float64{groupID: &userRate}}
+		svc.UserGroupRateRepo = &publicBatchImageUserGroupRateRepo{rates: map[int64]*UserGroupRate{groupID: {RateMultiplier: 0.5}}}
 
 		got, err := svc.Submit(ctx, BatchImageOwner{UserID: 11, APIKeyID: 22, GroupID: &groupID}, validBatchImageSubmitRequest(), "")
 		require.NoError(t, err)
@@ -131,6 +130,41 @@ func TestBatchImagePublicService_Submit(t *testing.T) {
 		require.InDelta(t, 0.125, job.BillableUnitPrice, 1e-12)
 		require.InDelta(t, 0.125, job.HoldUnitPrice, 1e-12)
 		require.InDelta(t, 0.25, *job.HoldAmount, 1e-12)
+	})
+
+	t.Run("freezes effective custom and group dynamic rates", func(t *testing.T) {
+		for _, tc := range []struct {
+			name        string
+			custom      *UserGroupRate
+			independent bool
+			want        float64
+			dynamic     bool
+		}{
+			{name: "group expression", want: 0.63, dynamic: true},
+			{name: "custom static", custom: &UserGroupRate{RateMultiplier: 0.8}, want: 0.8},
+			{name: "custom zero", custom: &UserGroupRate{RateMultiplier: 0}, want: 0},
+			{name: "custom matches default", custom: &UserGroupRate{RateMultiplier: 1}, want: 1},
+			{name: "custom expression", custom: &UserGroupRate{RateMultiplier: 1, RateMultiplierExpr: "$up * 2"}, want: 1.2, dynamic: true},
+			{name: "independent image rate", custom: &UserGroupRate{RateMultiplier: 1, RateMultiplierExpr: "$up * 2"}, independent: true, want: 0.4},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				svc, repo, _, _, _ := newTestBatchImagePublicService(true)
+				groupID, upstream := int64(7), 0.6
+				svc.AccountRepo.(*publicBatchImageAccountRepo).accounts[0].RateMultiplier = &upstream
+				svc.GroupRepo = &publicBatchImageGroupRepo{groups: map[int64]*Group{groupID: {
+					ID: groupID, Platform: PlatformGemini, RateMultiplier: 1, RateMultiplierExpr: "$up * 1.05",
+					AllowBatchImageGeneration: true, ImageRateIndependent: tc.independent, ImageRateMultiplier: 0.4,
+					BatchImageDiscountMultiplier: 0.5, BatchImageHoldMultiplier: 0.6,
+				}}}
+				svc.UserGroupRateRepo = &publicBatchImageUserGroupRateRepo{rates: map[int64]*UserGroupRate{groupID: tc.custom}}
+				got, err := svc.Submit(ctx, BatchImageOwner{UserID: 11, APIKeyID: 22, GroupID: &groupID}, validBatchImageSubmitRequest(), "")
+				require.NoError(t, err)
+				job := repo.jobs[got.ID]
+				require.InDelta(t, tc.want, job.GroupRateMultiplier, 1e-12)
+				require.Equal(t, tc.dynamic, job.IsDynamicRate)
+				require.Equal(t, 2, job.PricingSnapshotVersion)
+			})
+		}
 	})
 
 	t.Run("uses configured group 1k image price for batch image base price", func(t *testing.T) {
@@ -984,10 +1018,10 @@ func (r *publicBatchImageGroupRepo) GetByIDLite(_ context.Context, id int64) (*G
 }
 
 type publicBatchImageUserGroupRateRepo struct {
-	rates map[int64]*float64
+	rates map[int64]*UserGroupRate
 }
 
-func (r *publicBatchImageUserGroupRateRepo) GetByUserAndGroup(_ context.Context, _ int64, groupID int64) (*float64, error) {
+func (r *publicBatchImageUserGroupRateRepo) GetByUserAndGroup(_ context.Context, _ int64, groupID int64) (*UserGroupRate, error) {
 	if r != nil && r.rates != nil {
 		return r.rates[groupID], nil
 	}
