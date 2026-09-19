@@ -125,6 +125,7 @@ type BatchImageJob struct {
 	ActualCost              *float64
 	BaseUnitPrice           float64
 	GroupRateMultiplier     float64
+	IsDynamicRate           bool
 	AccountRateMultiplier   float64
 	BatchDiscountMultiplier float64
 	HoldMultiplier          float64
@@ -185,6 +186,7 @@ type CreateBatchImageJobParams struct {
 	ActualCost              *float64
 	BaseUnitPrice           float64
 	GroupRateMultiplier     float64
+	IsDynamicRate           bool
 	AccountRateMultiplier   float64
 	BatchDiscountMultiplier float64
 	HoldMultiplier          float64

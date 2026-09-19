@@ -202,12 +202,12 @@ func (s *openAIRecordUsageAPIKeyQuotaStub) UpdateRateLimitUsage(ctx context.Cont
 type openAIUserGroupRateRepoStub struct {
 	UserGroupRateRepository
 
-	rate  *float64
+	rate  *UserGroupRate
 	err   error
 	calls int
 }
 
-func (s *openAIUserGroupRateRepoStub) GetByUserAndGroup(ctx context.Context, userID, groupID int64) (*float64, error) {
+func (s *openAIUserGroupRateRepoStub) GetByUserAndGroup(ctx context.Context, userID, groupID int64) (*UserGroupRate, error) {
 	s.calls++
 	if s.err != nil {
 		return nil, s.err
@@ -403,7 +403,7 @@ func TestOpenAIGatewayServiceRecordUsage_UsesUserSpecificGroupRate(t *testing.T)
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	userRepo := &openAIRecordUsageUserRepoStub{}
 	subRepo := &openAIRecordUsageSubRepoStub{}
-	rateRepo := &openAIUserGroupRateRepoStub{rate: &userRate}
+	rateRepo := &openAIUserGroupRateRepoStub{rate: &UserGroupRate{RateMultiplier: userRate}}
 	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, subRepo, rateRepo)
 
 	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
@@ -458,6 +458,9 @@ func TestOpenAIGatewayServiceRecordUsage_UsesSelectedAccountRateExpression(t *te
 	require.NoError(t, err)
 	require.NotNil(t, usageRepo.lastLog)
 	require.InDelta(t, 0.63, usageRepo.lastLog.RateMultiplier, 1e-12)
+	// 分组表达式求值成功：落库的倍率就是动态表达式算出的值。
+	require.NotNil(t, usageRepo.lastLog.IsDynamicRate)
+	require.True(t, *usageRepo.lastLog.IsDynamicRate)
 	expected := expectedOpenAICost(t, svc, "gpt-5.1", usage, 0.63)
 	require.InDelta(t, expected.ActualCost, usageRepo.lastLog.ActualCost, 1e-12)
 	require.InDelta(t, expected.ActualCost, userRepo.lastAmount, 1e-12)
@@ -2291,7 +2294,7 @@ func TestOpenAIGatewayServiceRecordUsage_ImageSharedMultiplierUsesUserGroupOverr
 		usageRepo,
 		&openAIRecordUsageUserRepoStub{},
 		&openAIRecordUsageSubRepoStub{},
-		&openAIUserGroupRateRepoStub{rate: &userRate},
+		&openAIUserGroupRateRepoStub{rate: &UserGroupRate{RateMultiplier: userRate}},
 	)
 
 	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
@@ -2345,6 +2348,7 @@ func TestOpenAIGatewayServiceRecordUsage_ImageIndependentMultiplierUsesImageRate
 			Group: &Group{
 				ID:                   groupID,
 				RateMultiplier:       0.15,
+				RateMultiplierExpr:   "$up * 3",
 				ImageRateIndependent: true,
 				ImageRateMultiplier:  1,
 				ImagePrice1K:         &imagePrice,
@@ -2361,6 +2365,85 @@ func TestOpenAIGatewayServiceRecordUsage_ImageIndependentMultiplierUsesImageRate
 	require.InDelta(t, 1.0, usageRepo.lastLog.RateMultiplier, 1e-12)
 	require.NotNil(t, usageRepo.lastLog.BillingMode)
 	require.Equal(t, string(BillingModeImage), *usageRepo.lastLog.BillingMode)
+	// 生效的是独立图片倍率（分组静态配置），分组动态表达式没有参与 → 不得标 dynamic。
+	require.NotNil(t, usageRepo.lastLog.IsDynamicRate)
+	require.False(t, *usageRepo.lastLog.IsDynamicRate)
+}
+
+// 用户自定义动态倍率压过分组动态表达式，且随所选上游账号变化：同一请求内生效的
+// 就是该账号的报价，缓存里只有配置、没有求值结果。
+func TestOpenAIGatewayServiceRecordUsage_UserExpressionOverridesGroupExpression(t *testing.T) {
+	groupID := int64(127)
+	groupRate := 1.4
+	userStatic := 1.1
+	usage := OpenAIUsage{InputTokens: 15, OutputTokens: 4}
+
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	rateRepo := &openAIUserGroupRateRepoStub{rate: &UserGroupRate{
+		RateMultiplier:     userStatic,
+		RateMultiplierExpr: "$up + 0.25",
+	}}
+	svc := newOpenAIRecordUsageServiceForTest(usageRepo, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{}, rateRepo)
+
+	for _, tc := range []struct {
+		requestID string
+		upstream  float64
+		want      float64
+	}{
+		{requestID: "resp_user_expr_a", upstream: 0.5, want: 0.75},
+		{requestID: "resp_user_expr_b", upstream: 2, want: 2.25},
+	} {
+		err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+			Result: &OpenAIForwardResult{RequestID: tc.requestID, Usage: usage, Model: "gpt-5.1", Duration: time.Second},
+			APIKey: &APIKey{ID: 1127, GroupID: &groupID, Group: &Group{
+				ID: groupID, RateMultiplier: groupRate, RateMultiplierExpr: "$up * 9",
+			}},
+			User:    &User{ID: 2127},
+			Account: &Account{ID: 3127, RateMultiplier: &tc.upstream},
+		})
+		require.NoError(t, err)
+		require.NotNil(t, usageRepo.lastLog)
+		require.InDelta(t, tc.want, usageRepo.lastLog.RateMultiplier, 1e-12)
+		require.NotNil(t, usageRepo.lastLog.IsDynamicRate)
+		require.True(t, *usageRepo.lastLog.IsDynamicRate)
+	}
+	require.Equal(t, 1, rateRepo.calls, "同一 (user, group) 只回源一次，求值按账号现算")
+}
+
+// 用户覆盖为 0 或等于分组默认仍是覆盖：分组动态表达式不得接管。
+func TestOpenAIGatewayServiceRecordUsage_UserStaticOverrideRetainsPrecedence(t *testing.T) {
+	groupID := int64(128)
+	groupRate := 1.4
+	usage := OpenAIUsage{InputTokens: 15, OutputTokens: 4}
+
+	for _, tc := range []struct {
+		name       string
+		userStatic float64
+	}{
+		{name: "zero", userStatic: 0},
+		{name: "equal_to_group", userStatic: groupRate},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+			rateRepo := &openAIUserGroupRateRepoStub{rate: &UserGroupRate{RateMultiplier: tc.userStatic}}
+			svc := newOpenAIRecordUsageServiceForTest(usageRepo, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{}, rateRepo)
+
+			upstream := 0.6
+			err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+				Result: &OpenAIForwardResult{RequestID: "resp_user_static_override", Usage: usage, Model: "gpt-5.1", Duration: time.Second},
+				APIKey: &APIKey{ID: 1128, GroupID: &groupID, Group: &Group{
+					ID: groupID, RateMultiplier: groupRate, RateMultiplierExpr: "$up * 9",
+				}},
+				User:    &User{ID: 2128},
+				Account: &Account{ID: 3128, RateMultiplier: &upstream},
+			})
+			require.NoError(t, err)
+			require.NotNil(t, usageRepo.lastLog)
+			require.InDelta(t, tc.userStatic, usageRepo.lastLog.RateMultiplier, 1e-12)
+			require.NotNil(t, usageRepo.lastLog.IsDynamicRate)
+			require.False(t, *usageRepo.lastLog.IsDynamicRate)
+		})
+	}
 }
 
 func TestGrokVideoBillingUsesSeparateVideoRateMultiplier(t *testing.T) {

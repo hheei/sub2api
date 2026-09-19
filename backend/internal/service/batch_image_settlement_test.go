@@ -49,6 +49,30 @@ func TestBatchImageSettlementService_SettlesAndChargesSuccessfulImagesOnly(t *te
 	require.NotContains(t, fmt.Sprintf("%+v", billing.captures[0]), "prompt")
 }
 
+func TestBatchImageSettlementService_RecordsFrozenDynamicRate(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		version int
+		dynamic bool
+		want    *bool
+	}{
+		{name: "legacy", version: 1},
+		{name: "static", version: 2, want: boolOverridePtr(false)},
+		{name: "dynamic", version: 2, dynamic: true, want: boolOverridePtr(true)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			job := testSettlingBatchImageJob("imgbatch_dynamic")
+			job.PricingSnapshotVersion = tc.version
+			job.IsDynamicRate = tc.dynamic
+			usageLogs := &openAIRecordUsageLogRepoStub{}
+			svc := &BatchImageSettlementService{UsageLogRepo: usageLogs}
+			svc.recordUsageLog(context.Background(), job, 0.5, "batch_dynamic", job.CreatedAt)
+			require.NotNil(t, usageLogs.lastLog)
+			require.Equal(t, tc.want, usageLogs.lastLog.IsDynamicRate)
+		})
+	}
+}
+
 func TestBatchImageSettlementService_ZeroSuccessCanComplete(t *testing.T) {
 	repo := newFakeBatchImageRepository()
 	job := testSettlingBatchImageJob("imgbatch_zero")

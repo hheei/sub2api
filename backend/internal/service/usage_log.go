@@ -160,13 +160,19 @@ type UsageLog struct {
 	ImageOutputTokens int
 	ImageOutputCost   float64
 
-	InputCost                 float64
-	OutputCost                float64
-	CacheCreationCost         float64
-	CacheReadCost             float64
-	TotalCost                 float64
-	ActualCost                float64
-	RateMultiplier            float64
+	InputCost         float64
+	OutputCost        float64
+	CacheCreationCost float64
+	CacheReadCost     float64
+	TotalCost         float64
+	ActualCost        float64
+	RateMultiplier    float64
+	// IsDynamicRate records whether the effective rate multiplier for this
+	// request was produced by a dynamic rate expression ($up-based).
+	// Nil means historical/unknown and MUST NOT be inferred from the group
+	// configuration, which may have changed since the row was written.
+	IsDynamicRate *bool
+
 	LongContextBillingApplied bool
 	// AccountRateMultiplier 账号计费倍率快照（nil 表示历史数据，按 1.0 处理）
 	AccountRateMultiplier *float64

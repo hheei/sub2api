@@ -44,7 +44,7 @@ type BatchImageGroupPricingRepository interface {
 }
 
 type BatchImageUserGroupRateRepository interface {
-	GetByUserAndGroup(ctx context.Context, userID, groupID int64) (*float64, error)
+	GetByUserAndGroup(ctx context.Context, userID, groupID int64) (*UserGroupRate, error)
 }
 
 type BatchImageSubmitRequest struct {
@@ -97,6 +97,7 @@ type BatchImagePublicService struct {
 type BatchImagePricingSnapshot struct {
 	BaseUnitPrice           float64
 	GroupRateMultiplier     float64
+	IsDynamicRate           bool
 	AccountRateMultiplier   float64
 	BatchDiscountMultiplier float64
 	HoldMultiplier          float64
@@ -272,12 +273,13 @@ func (s *BatchImagePublicService) Submit(ctx context.Context, owner BatchImageOw
 		HoldAmount:              &holdAmount,
 		BaseUnitPrice:           pricingSnapshot.BaseUnitPrice,
 		GroupRateMultiplier:     pricingSnapshot.GroupRateMultiplier,
+		IsDynamicRate:           pricingSnapshot.IsDynamicRate,
 		AccountRateMultiplier:   pricingSnapshot.AccountRateMultiplier,
 		BatchDiscountMultiplier: pricingSnapshot.BatchDiscountMultiplier,
 		HoldMultiplier:          pricingSnapshot.HoldMultiplier,
 		BillableUnitPrice:       pricingSnapshot.BillableUnitPrice,
 		HoldUnitPrice:           pricingSnapshot.HoldUnitPrice,
-		PricingSnapshotVersion:  1,
+		PricingSnapshotVersion:  2,
 		Currency:                "USD",
 		HoldID:                  &holdID,
 		IdempotencyKey:          batchImageOptionalStringPtr(idempotencyKey),
@@ -1000,6 +1002,14 @@ func (s *BatchImagePublicService) ensureGroupAllowsBatchImage(ctx context.Contex
 func (s *BatchImagePublicService) resolvePricingSnapshot(ctx context.Context, owner BatchImageOwner, req BatchImageSubmitRequest, provider string, account *Account) (*BatchImagePricingSnapshot, error) {
 	unit := -1.0
 	groupMultiplier := 1.0
+	rateIsDynamic := false
+	accountMultiplier := 1.0
+	if account != nil {
+		accountMultiplier = account.BillingRateMultiplier()
+	}
+	if accountMultiplier < 0 {
+		accountMultiplier = 0
+	}
 	discountMultiplier := defaultBatchImageDiscountMultiplier
 	holdMultiplier := defaultBatchImageHoldMultiplier
 	if owner.GroupID != nil && *owner.GroupID > 0 {
@@ -1013,23 +1023,18 @@ func (s *BatchImagePublicService) resolvePricingSnapshot(ctx context.Context, ow
 		if !group.AllowBatchImageGeneration {
 			return nil, ErrBatchImageGroupDisabled
 		}
-		groupDefaultMultiplier := group.RateMultiplier
-		if groupDefaultMultiplier < 0 {
-			groupDefaultMultiplier = 0
-		}
-		effectiveGroupMultiplier := groupDefaultMultiplier
+		var custom *UserGroupRate
 		if s.UserGroupRateRepo != nil {
-			userRate, rateErr := s.UserGroupRateRepo.GetByUserAndGroup(ctx, owner.UserID, group.ID)
+			var rateErr error
+			custom, rateErr = s.UserGroupRateRepo.GetByUserAndGroup(ctx, owner.UserID, group.ID)
 			if rateErr != nil {
 				return nil, ErrBatchImageSettlementPricingMissing
 			}
-			if userRate != nil {
-				effectiveGroupMultiplier = *userRate
-			}
 		}
-		groupMultiplier = effectiveGroupMultiplier
+		groupMultiplier, rateIsDynamic = resolveRateForUpstream(custom, group, accountMultiplier, "service.batch_image")
 		if group.ImageRateIndependent {
 			groupMultiplier = group.ImageRateMultiplier
+			rateIsDynamic = false
 		}
 		if groupMultiplier < 0 {
 			groupMultiplier = 0
@@ -1065,19 +1070,13 @@ func (s *BatchImagePublicService) resolvePricingSnapshot(ctx context.Context, ow
 		)
 		holdMultiplier = discountMultiplier
 	}
-	accountMultiplier := 1.0
-	if account != nil {
-		accountMultiplier = account.BillingRateMultiplier()
-	}
-	if accountMultiplier < 0 {
-		accountMultiplier = 0
-	}
 	standardUnitPrice := unit * groupMultiplier * accountMultiplier
 	billableUnitPrice := standardUnitPrice * discountMultiplier
 	holdUnitPrice := standardUnitPrice * holdMultiplier
 	return &BatchImagePricingSnapshot{
 		BaseUnitPrice:           unit,
 		GroupRateMultiplier:     groupMultiplier,
+		IsDynamicRate:           rateIsDynamic,
 		AccountRateMultiplier:   accountMultiplier,
 		BatchDiscountMultiplier: discountMultiplier,
 		HoldMultiplier:          holdMultiplier,

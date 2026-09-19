@@ -35,7 +35,7 @@ type keyBillingRouteRateRepo struct {
 	lookupCalls int
 }
 
-func (r *keyBillingRouteRateRepo) GetByUserAndGroup(context.Context, int64, int64) (*float64, error) {
+func (r *keyBillingRouteRateRepo) GetByUserAndGroup(context.Context, int64, int64) (*service.UserGroupRate, error) {
 	r.lookupCalls++
 	return nil, nil
 }

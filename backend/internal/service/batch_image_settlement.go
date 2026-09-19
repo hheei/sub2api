@@ -280,6 +280,9 @@ func (s *BatchImageSettlementService) recordUsageLog(ctx context.Context, job *B
 		SessionID:             job.SessionID,
 		CreatedAt:             createdAt,
 	}
+	if job.PricingSnapshotVersion >= 2 {
+		usageLog.IsDynamicRate = boolOverridePtr(job.IsDynamicRate)
+	}
 	writeUsageLogBestEffort(ctx, s.UsageLogRepo, usageLog, "service.batch_image_settlement")
 }
 
