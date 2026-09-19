@@ -22089,6 +22089,7 @@ type GroupMutation struct {
 	i18n                                    *domain.GroupI18n
 	rate_multiplier                         *float64
 	addrate_multiplier                      *float64
+	rate_multiplier_expr                    *string
 	peak_rate_enabled                       *bool
 	peak_start                              *string
 	peak_end                                *string
@@ -22596,6 +22597,42 @@ func (m *GroupMutation) AddedRateMultiplier() (r float64, exists bool) {
 func (m *GroupMutation) ResetRateMultiplier() {
 	m.rate_multiplier = nil
 	m.addrate_multiplier = nil
+}
+
+// SetRateMultiplierExpr sets the "rate_multiplier_expr" field.
+func (m *GroupMutation) SetRateMultiplierExpr(s string) {
+	m.rate_multiplier_expr = &s
+}
+
+// RateMultiplierExpr returns the value of the "rate_multiplier_expr" field in the mutation.
+func (m *GroupMutation) RateMultiplierExpr() (r string, exists bool) {
+	v := m.rate_multiplier_expr
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRateMultiplierExpr returns the old "rate_multiplier_expr" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldRateMultiplierExpr(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRateMultiplierExpr is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRateMultiplierExpr requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRateMultiplierExpr: %w", err)
+	}
+	return oldValue.RateMultiplierExpr, nil
+}
+
+// ResetRateMultiplierExpr resets all changes to the "rate_multiplier_expr" field.
+func (m *GroupMutation) ResetRateMultiplierExpr() {
+	m.rate_multiplier_expr = nil
 }
 
 // SetPeakRateEnabled sets the "peak_rate_enabled" field.
@@ -25980,6 +26017,9 @@ func (m *GroupMutation) Fields() []string {
 	if m.rate_multiplier != nil {
 		fields = append(fields, group.FieldRateMultiplier)
 	}
+	if m.rate_multiplier_expr != nil {
+		fields = append(fields, group.FieldRateMultiplierExpr)
+	}
 	if m.peak_rate_enabled != nil {
 		fields = append(fields, group.FieldPeakRateEnabled)
 	}
@@ -26182,6 +26222,8 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.I18n()
 	case group.FieldRateMultiplier:
 		return m.RateMultiplier()
+	case group.FieldRateMultiplierExpr:
+		return m.RateMultiplierExpr()
 	case group.FieldPeakRateEnabled:
 		return m.PeakRateEnabled()
 	case group.FieldPeakStart:
@@ -26325,6 +26367,8 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldI18n(ctx)
 	case group.FieldRateMultiplier:
 		return m.OldRateMultiplier(ctx)
+	case group.FieldRateMultiplierExpr:
+		return m.OldRateMultiplierExpr(ctx)
 	case group.FieldPeakRateEnabled:
 		return m.OldPeakRateEnabled(ctx)
 	case group.FieldPeakStart:
@@ -26502,6 +26546,13 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetRateMultiplier(v)
+		return nil
+	case group.FieldRateMultiplierExpr:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRateMultiplierExpr(v)
 		return nil
 	case group.FieldPeakRateEnabled:
 		v, ok := value.(bool)
@@ -27454,6 +27505,9 @@ func (m *GroupMutation) ResetField(name string) error {
 		return nil
 	case group.FieldRateMultiplier:
 		m.ResetRateMultiplier()
+		return nil
+	case group.FieldRateMultiplierExpr:
+		m.ResetRateMultiplierExpr()
 		return nil
 	case group.FieldPeakRateEnabled:
 		m.ResetPeakRateEnabled()

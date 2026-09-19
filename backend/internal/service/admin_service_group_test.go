@@ -18,6 +18,22 @@ func ptrString[T ~string](v T) *string {
 	return &s
 }
 
+func TestAdminServiceRejectsInvalidRateMultiplierExpr(t *testing.T) {
+	repo := &groupRepoStubForAdmin{getByID: &Group{ID: 1, RateMultiplier: 1}}
+	svc := &adminServiceImpl{groupRepo: repo}
+
+	_, err := svc.CreateGroup(context.Background(), &CreateGroupInput{
+		Name: "invalid-expr", RateMultiplier: 1, RateMultiplierExpr: "foo($up)",
+	})
+	require.Error(t, err)
+	require.Nil(t, repo.created)
+
+	expr := "$up > 1"
+	_, err = svc.UpdateGroup(context.Background(), 1, &UpdateGroupInput{RateMultiplierExpr: &expr})
+	require.Error(t, err)
+	require.Nil(t, repo.updated)
+}
+
 // groupRepoStubForAdmin 用于测试 AdminService 的 GroupRepository Stub
 type groupRepoStubForAdmin struct {
 	created  *Group // 记录 Create 调用的参数

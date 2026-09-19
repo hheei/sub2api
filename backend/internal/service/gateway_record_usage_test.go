@@ -230,6 +230,36 @@ func TestGatewayServiceRecordUsage_GeminiFlashThinkingTierUsesCatalogPrice(t *te
 	}
 }
 
+func TestGatewayServiceRecordUsage_UsesSelectedAccountRateExpression(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	svc := newGatewayRecordUsageServiceForTest(usageRepo, userRepo, &openAIRecordUsageSubRepoStub{})
+	svc.billingService = NewBillingService(svc.cfg, &PricingService{pricingData: map[string]*LiteLLMModelPricing{
+		"gemini-3.7-flash": {InputCostPerToken: 0.75e-6, OutputCostPerToken: 3.75e-6},
+	}})
+	svc.resolver = NewModelPricingResolver(nil, svc.billingService)
+	groupID := int64(28)
+	upstreamRate := 0.4
+
+	err := svc.RecordUsage(context.Background(), &RecordUsageInput{
+		Result: &ForwardResult{
+			RequestID: "gateway_rate_expr", Model: "gemini-3.7-flash", UpstreamModel: "gemini-3.7-flash",
+			Usage: ClaudeUsage{InputTokens: 1000, OutputTokens: 100}, Duration: time.Second,
+		},
+		APIKey: &APIKey{ID: 502, GroupID: &groupID, Group: &Group{
+			ID: groupID, Platform: PlatformGemini, RateMultiplier: 1.5, RateMultiplierExpr: "$up + 0.1",
+		}},
+		User:    &User{ID: 602},
+		Account: &Account{ID: 702, Platform: PlatformGemini, Type: AccountTypeAPIKey, RateMultiplier: &upstreamRate},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.InDelta(t, 0.5, usageRepo.lastLog.RateMultiplier, 1e-12)
+	require.InDelta(t, 0.0005625, usageRepo.lastLog.ActualCost, 1e-12)
+	require.InDelta(t, usageRepo.lastLog.ActualCost, userRepo.lastAmount, 1e-12)
+}
+
 func TestGatewayServiceRecordUsage_PreservesChannelMappedUpstreamModel(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	svc := newGatewayRecordUsageServiceForTest(usageRepo, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{})
