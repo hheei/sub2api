@@ -438,6 +438,31 @@ func TestOpenAIGatewayServiceRecordUsage_UsesUserSpecificGroupRate(t *testing.T)
 	require.Equal(t, 1, userRepo.deductCalls)
 }
 
+func TestOpenAIGatewayServiceRecordUsage_UsesSelectedAccountRateExpression(t *testing.T) {
+	groupID := int64(12)
+	upstreamRate := 0.6
+	usage := OpenAIUsage{InputTokens: 15, OutputTokens: 4}
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, &openAIRecordUsageSubRepoStub{}, nil)
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{RequestID: "resp_rate_expr", Usage: usage, Model: "gpt-5.1", Duration: time.Second},
+		APIKey: &APIKey{ID: 1002, GroupID: &groupID, Group: &Group{
+			ID: groupID, RateMultiplier: 1.4, RateMultiplierExpr: "$up * 1.05",
+		}},
+		User:    &User{ID: 2002},
+		Account: &Account{ID: 3002, RateMultiplier: &upstreamRate},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.InDelta(t, 0.63, usageRepo.lastLog.RateMultiplier, 1e-12)
+	expected := expectedOpenAICost(t, svc, "gpt-5.1", usage, 0.63)
+	require.InDelta(t, expected.ActualCost, usageRepo.lastLog.ActualCost, 1e-12)
+	require.InDelta(t, expected.ActualCost, userRepo.lastAmount, 1e-12)
+}
+
 func TestOpenAIGatewayServiceRecordUsage_PeakRateAffectsTokenModeImageOutputTokens(t *testing.T) {
 	groupID := int64(14)
 	groupRate := 1.0

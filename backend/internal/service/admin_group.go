@@ -405,6 +405,9 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	if err != nil {
 		return nil, err
 	}
+	if err := ValidateRateMultiplierExpr(input.RateMultiplierExpr); err != nil {
+		return nil, infraerrors.Newf(http.StatusBadRequest, "INVALID_RATE_MULTIPLIER_EXPR", "%v", err)
+	}
 
 	platform := NormalizeGroupPlatform(input.Platform)
 	// 固定账号 manifest 配置：账号绑定发生在创建之后，创建时无法校验成员关系，
@@ -579,6 +582,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		I18n:                            i18n,
 		Platform:                        platform,
 		RateMultiplier:                  input.RateMultiplier,
+		RateMultiplierExpr:              strings.TrimSpace(input.RateMultiplierExpr),
 		IsExclusive:                     input.IsExclusive,
 		Status:                          StatusActive,
 		SubscriptionType:                subscriptionType,
@@ -803,6 +807,12 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 			return nil, errors.New("rate_multiplier must be > 0")
 		}
 		group.RateMultiplier = *input.RateMultiplier
+	}
+	if input.RateMultiplierExpr != nil {
+		if err := ValidateRateMultiplierExpr(*input.RateMultiplierExpr); err != nil {
+			return nil, infraerrors.Newf(http.StatusBadRequest, "INVALID_RATE_MULTIPLIER_EXPR", "%v", err)
+		}
+		group.RateMultiplierExpr = strings.TrimSpace(*input.RateMultiplierExpr)
 	}
 	if input.IsExclusive != nil {
 		group.IsExclusive = *input.IsExclusive
