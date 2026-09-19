@@ -118,6 +118,20 @@ func (_u *GroupUpdate) AddRateMultiplier(v float64) *GroupUpdate {
 	return _u
 }
 
+// SetRateMultiplierExpr sets the "rate_multiplier_expr" field.
+func (_u *GroupUpdate) SetRateMultiplierExpr(v string) *GroupUpdate {
+	_u.mutation.SetRateMultiplierExpr(v)
+	return _u
+}
+
+// SetNillableRateMultiplierExpr sets the "rate_multiplier_expr" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableRateMultiplierExpr(v *string) *GroupUpdate {
+	if v != nil {
+		_u.SetRateMultiplierExpr(*v)
+	}
+	return _u
+}
+
 // SetPeakRateEnabled sets the "peak_rate_enabled" field.
 func (_u *GroupUpdate) SetPeakRateEnabled(v bool) *GroupUpdate {
 	_u.mutation.SetPeakRateEnabled(v)
@@ -1587,6 +1601,9 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.AddedRateMultiplier(); ok {
 		_spec.AddField(group.FieldRateMultiplier, field.TypeFloat64, value)
 	}
+	if value, ok := _u.mutation.RateMultiplierExpr(); ok {
+		_spec.SetField(group.FieldRateMultiplierExpr, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.PeakRateEnabled(); ok {
 		_spec.SetField(group.FieldPeakRateEnabled, field.TypeBool, value)
 	}
@@ -2309,6 +2326,20 @@ func (_u *GroupUpdateOne) SetNillableRateMultiplier(v *float64) *GroupUpdateOne 
 // AddRateMultiplier adds value to the "rate_multiplier" field.
 func (_u *GroupUpdateOne) AddRateMultiplier(v float64) *GroupUpdateOne {
 	_u.mutation.AddRateMultiplier(v)
+	return _u
+}
+
+// SetRateMultiplierExpr sets the "rate_multiplier_expr" field.
+func (_u *GroupUpdateOne) SetRateMultiplierExpr(v string) *GroupUpdateOne {
+	_u.mutation.SetRateMultiplierExpr(v)
+	return _u
+}
+
+// SetNillableRateMultiplierExpr sets the "rate_multiplier_expr" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableRateMultiplierExpr(v *string) *GroupUpdateOne {
+	if v != nil {
+		_u.SetRateMultiplierExpr(*v)
+	}
 	return _u
 }
 
@@ -3810,6 +3841,9 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if value, ok := _u.mutation.AddedRateMultiplier(); ok {
 		_spec.AddField(group.FieldRateMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.RateMultiplierExpr(); ok {
+		_spec.SetField(group.FieldRateMultiplierExpr, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.PeakRateEnabled(); ok {
 		_spec.SetField(group.FieldPeakRateEnabled, field.TypeBool, value)
