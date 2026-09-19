@@ -30,7 +30,7 @@ type keyBillingInfoResponse struct {
 	ObservedAt              time.Time `json:"observed_at"`
 }
 
-// KeyBillingInfo returns the token billing multiplier effective for the authenticated API key.
+// KeyBillingInfo returns a token billing snapshot; dynamic rates use their static fallback before account selection.
 // GET /v1/sub2api/billing
 func (h *GatewayHandler) KeyBillingInfo(c *gin.Context) {
 	apiKey, ok := middleware2.GetAPIKeyFromContext(c)
@@ -51,36 +51,37 @@ func (h *GatewayHandler) KeyBillingInfo(c *gin.Context) {
 		return
 	}
 
-	resolvedRate, ok := h.resolveKeyBillingRate(c, apiKey)
+	resolvedRate, hasUserRate, ok := h.resolveKeyBillingRate(c, apiKey)
 	if !ok {
 		h.errorResponse(c, http.StatusInternalServerError, "api_error", "Billing information is unavailable")
 		return
 	}
 
 	c.Header("Cache-Control", "no-store")
-	c.JSON(http.StatusOK, buildKeyBillingInfo(apiKey, resolvedRate, timezone.Now()))
+	c.JSON(http.StatusOK, buildKeyBillingInfo(apiKey, resolvedRate, hasUserRate, timezone.Now()))
 }
 
-func (h *GatewayHandler) resolveKeyBillingRate(c *gin.Context, apiKey *service.APIKey) (float64, bool) {
-	groupRate := apiKey.Group.RateMultiplier
+func (h *GatewayHandler) resolveKeyBillingRate(c *gin.Context, apiKey *service.APIKey) (float64, bool, bool) {
 	switch apiKey.Group.Platform {
 	case service.PlatformOpenAI, service.PlatformGrok:
 		if h.openAIGatewayService == nil {
-			return 0, false
+			return 0, false, false
 		}
-		return h.openAIGatewayService.ResolveUserGroupRateMultiplier(c.Request.Context(), apiKey.UserID, *apiKey.GroupID, groupRate), true
+		rate, hasUserRate := h.openAIGatewayService.ResolveStaticRate(c.Request.Context(), apiKey.UserID, *apiKey.GroupID, apiKey.Group)
+		return rate, hasUserRate, true
 	default:
 		if h.gatewayService == nil {
-			return 0, false
+			return 0, false, false
 		}
-		return h.gatewayService.ResolveUserGroupRateMultiplier(c.Request.Context(), apiKey.UserID, *apiKey.GroupID, groupRate), true
+		rate, hasUserRate := h.gatewayService.ResolveStaticRate(c.Request.Context(), apiKey.UserID, *apiKey.GroupID, apiKey.Group)
+		return rate, hasUserRate, true
 	}
 }
 
-func buildKeyBillingInfo(apiKey *service.APIKey, resolvedRate float64, now time.Time) keyBillingInfoResponse {
+func buildKeyBillingInfo(apiKey *service.APIKey, resolvedRate float64, hasUserRate bool, now time.Time) keyBillingInfoResponse {
 	groupRate := apiKey.Group.RateMultiplier
 	var userRate *float64
-	if resolvedRate != groupRate {
+	if hasUserRate {
 		userRate = &resolvedRate
 	}
 	appliedPeak := apiKey.Group.PeakMultiplierAt(now)

@@ -188,8 +188,8 @@ type UpdateUserInput struct {
 	// RestrictPublicGroups 指针区分"未提供"和"显式开关"。
 	RestrictPublicGroups *bool
 	// GroupRates 用户专属分组倍率配置
-	// map[groupID]*rate，nil 表示删除该分组的专属倍率
-	GroupRates map[int64]*float64
+	// map[groupID]*UserGroupRate，nil 表示删除该分组的专属倍率覆盖
+	GroupRates map[int64]*UserGroupRate
 	// ActorAdminID 执行本次操作的管理员ID(来自JWT)，仅用于权限敏感操作的审计日志。
 	ActorAdminID int64
 }
@@ -726,7 +726,7 @@ type adminRechargeAffiliateAccruer interface {
 }
 
 type userGroupRateBatchReader interface {
-	GetByUserIDs(ctx context.Context, userIDs []int64) (map[int64]map[int64]float64, error)
+	GetByUserIDs(ctx context.Context, userIDs []int64) (map[int64]map[int64]UserGroupRate, error)
 }
 
 // NewAdminService creates a new AdminService

@@ -48,6 +48,8 @@ function mountTable(
     imageRateMultiplier?: number | null
     peakWindow?: string
     peakRateMultiplier?: number | null
+    isDynamic?: boolean
+    userRateIsDynamic?: boolean
   }
 ) {
   return mount(PlazaModelPricingTable, {
@@ -696,5 +698,96 @@ describe('PlazaModelPricingTable 分时计价', () => {
     const wrapper = mountTable([tokenModel()], 1)
     expect(wrapper.findAll('tbody tr')).toHaveLength(1)
     expect(wrapper.find('[title*="modelPlaza.table.timePricingRowHint"]').exists()).toBe(false)
+  })
+
+  it('动态生效倍率时实付价与时段倍率展示 DYN,不拿回退数值冒充最终价', () => {
+    const wrapper = mountTable([timePricedModel()], 1, null, { isDynamic: true })
+    const trs = wrapper.findAll('tbody tr')
+
+    // 标准行:实付三列全部 DYN(回退值 1 不得参与报价)
+    const baseCells = trs[0].findAll('td')
+    expect(baseCells[1].text()).toBe('usage.dynamicRate')
+    expect(baseCells[2].text()).toBe('usage.dynamicRate')
+    // 缓存列同样只展示 DYN(不再渲染折算后的写入/读取价)
+    expect(baseCells[3].text()).toContain('usage.dynamicRate')
+    expect(baseCells[3].text()).not.toContain('$')
+    expect(baseCells[7].text()).toBe('usage.dynamicRate')
+    // 官方参考价不受动态倍率影响,仍然可见
+    expect(baseCells[4].text()).toContain('$3.00')
+
+    // 时段行:价格与倍率列都保持 DYN,而不是 回退 × 时段倍率
+    const nightCells = trs[1].findAll('td')
+    expect(nightCells[1].text()).toBe('usage.dynamicRate')
+    expect(nightCells[7].text()).toBe('usage.dynamicRate')
+    expect(nightCells[7].find('[title="usage.dynamicRateTitle"]').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('$1.20')
+  })
+
+  it('专属动态倍率优先于静态分组倍率,报价同样为 DYN', () => {
+    const wrapper = mountTable([tokenModel()], 3, 1, { userRateIsDynamic: true })
+
+    const cells = wrapper.findAll('tbody tr')[0].findAll('td')
+    expect(cells[1].text()).toBe('usage.dynamicRate')
+    expect(cells[7].text()).toContain('usage.dynamicRate')
+    // 划线展示的分组默认倍率仍保留,便于对照
+    expect(cells[7].find('.line-through').text()).toBe('3x')
+  })
+
+  it('专属静态倍率压过动态分组倍率时仍给出确定报价', () => {
+    const wrapper = mountTable([tokenModel()], 3, 0.5, { isDynamic: true, userRateIsDynamic: false })
+
+    const cells = wrapper.findAll('tbody tr')[0].findAll('td')
+    // 3 × 0.5 = 1.5,而不是 DYN
+    expect(cells[1].text()).toContain('$1.50')
+    expect(cells[7].text()).toContain('0.5x')
+    expect(cells[7].text()).not.toContain('usage.dynamicRate')
+  })
+
+  it('生图独立倍率开启时动态分组倍率不影响该行报价', () => {
+    const model = tokenModel({
+      name: 'gpt-image-2',
+      pricing: {
+        billing_mode: 'image',
+        input_price: null,
+        output_price: null,
+        cache_write_price: null,
+        cache_read_price: null,
+        image_input_price: null,
+        image_output_price: null,
+        per_request_price: 0.2,
+        intervals: []
+      },
+      official_pricing: null
+    })
+    const wrapper = mountTable([model], 1, null, {
+      isDynamic: true,
+      imageRateIndependent: true,
+      imageRateMultiplier: 1
+    })
+
+    expect(wrapper.text()).toContain('$0.20')
+    expect(wrapper.text()).not.toContain('usage.dynamicRate')
+  })
+
+  it('生图独立倍率关闭时动态分组倍率让按图报价变为 DYN', () => {
+    const model = tokenModel({
+      name: 'gpt-image-2',
+      pricing: {
+        billing_mode: 'image',
+        input_price: null,
+        output_price: null,
+        cache_write_price: null,
+        cache_read_price: null,
+        image_input_price: null,
+        image_output_price: null,
+        per_request_price: 0.2,
+        intervals: []
+      },
+      official_pricing: null
+    })
+    const wrapper = mountTable([model], 1, null, { isDynamic: true, imageRateIndependent: false })
+
+    expect(wrapper.text()).toContain('usage.dynamicRate')
+    expect(wrapper.text()).not.toContain('$0.20')
   })
 })

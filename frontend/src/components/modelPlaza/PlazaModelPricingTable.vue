@@ -283,8 +283,8 @@
             <span
               v-if="period"
               class="font-bold text-primary-600 dark:text-primary-400"
-              :title="t('modelPlaza.table.timePricingRateHint', { rate: effectiveRate, multiplier: period.multiplier })"
-              >{{ periodRate(period) }}x</span
+              :title="periodRateTitle(m, period)"
+              >{{ periodRateLabel(m, period) }}</span
             >
             <span
               v-else-if="usesIndependentImageRate(m)"
@@ -292,10 +292,10 @@
               >{{ requestRate(m) }}x</span
             >
             <template v-else-if="hasCustomRate">
-              <span class="mr-1 text-gray-400 line-through dark:text-dark-500">{{ rateMultiplier }}x</span>
-              <span class="font-bold text-primary-600 dark:text-primary-400">{{ effectiveRate }}x</span>
+              <span v-if="showsDefaultStrike" class="mr-1 text-gray-400 line-through dark:text-dark-500">{{ rateMultiplier }}x</span>
+              <span class="font-bold text-primary-600 dark:text-primary-400" :title="rateTitle">{{ rateLabel }}</span>
             </template>
-            <span v-else class="font-bold text-gray-700 dark:text-gray-300">{{ effectiveRate }}x</span>
+            <span v-else class="font-bold text-gray-700 dark:text-gray-300" :title="rateTitle">{{ rateLabel }}</span>
           </td>
         </tr>
       </tbody>
@@ -322,8 +322,12 @@ const props = defineProps<{
   platform?: string
   /** 分组默认倍率。 */
   rateMultiplier: number
-  /** 用户专属倍率;与默认不同,实付价按此计算并划线展示原倍率。 */
+  /** 用户专属倍率；仅在该分组存在专属覆盖时传入（0 与等于默认值同样是覆盖）。 */
   userRateMultiplier?: number | null
+  /** 用户专属倍率来自动态表达式；userRateMultiplier 仅为回退/展示值。 */
+  userRateIsDynamic?: boolean
+  /** 分组默认倍率来自动态表达式。 */
+  isDynamic?: boolean
   /** 生图独立倍率:true 时图片计费模型的实付倍率取 imageRateMultiplier,不取分组/专属倍率。 */
   imageRateIndependent?: boolean
   imageRateMultiplier?: number | null
@@ -364,9 +368,27 @@ const sortedModels = computed(() => {
 })
 
 const effectiveRate = computed(() => props.userRateMultiplier ?? props.rateMultiplier)
-const hasCustomRate = computed(
-  () => props.userRateMultiplier != null && props.userRateMultiplier !== props.rateMultiplier
+// 专属倍率有无只看是否传入：0 与等于分组默认值同样是覆盖。
+const hasCustomRate = computed(() => props.userRateMultiplier != null)
+// 专属倍率来自表达式时数值只是回退值，展示 DYN。
+const customIsDynamic = computed(() => hasCustomRate.value && props.userRateIsDynamic === true)
+// 生效来源的动态标记：有专属覆盖只看专属，没有才回落到分组。
+const effectiveIsDynamic = computed(() =>
+  hasCustomRate.value ? props.userRateIsDynamic === true : props.isDynamic === true
 )
+// 专属为表达式时没有固定值可比，仍需划线展示分组默认值。
+const showsDefaultStrike = computed(
+  () => hasCustomRate.value && (customIsDynamic.value || props.userRateMultiplier !== props.rateMultiplier)
+)
+const rateLabel = computed(() =>
+  effectiveIsDynamic.value ? t('usage.dynamicRate') : `${effectiveRate.value}x`
+)
+const rateTitle = computed(() => {
+  if (!hasCustomRate.value) {
+    return effectiveIsDynamic.value ? t('usage.dynamicRateTitle') : t('common.rateSourceGroup')
+  }
+  return customIsDynamic.value ? t('common.rateSourceCustomDynamic') : t('common.rateSourceCustom')
+})
 
 function billingMode(m: PlazaModel): BillingMode {
   return (m.pricing?.billing_mode || BILLING_MODE_TOKEN) as BillingMode
@@ -405,9 +427,13 @@ function periodRate(period: PlazaTimePricingPeriod): number {
   return Math.round(effectiveRate.value * period.multiplier * 1000) / 1000
 }
 
-/** 实付价 = 渠道单价 × 生效倍率(时段行再乘时段倍率),按 $/1M token 展示。 */
+/**
+ * 实付价 = 渠道单价 × 生效倍率(时段行再乘时段倍率),按 $/1M token 展示。
+ * 生效倍率为表达式时没有确定值：展示 DYN，绝不拿回退数值充当最终报价。
+ */
 function paidPerMillion(value: number | null | undefined, period: PlazaTimePricingPeriod | null = null): string {
   if (value == null) return '-'
+  if (effectiveIsDynamic.value) return t('usage.dynamicRate')
   const rate = period ? periodRate(period) : effectiveRate.value
   return formatScaled(value * rate, PER_MILLION, MIN_DECIMALS)
 }
@@ -422,10 +448,35 @@ function requestRate(m: PlazaModel): number {
   return usesIndependentImageRate(m) ? (props.imageRateMultiplier ?? 1) : effectiveRate.value
 }
 
-/** 按次 / 按图片单价(乘该行生效倍率,不换算 1M)。 */
+/**
+ * 按次 / 按图片单价(乘该行生效倍率,不换算 1M)。
+ * 生图独立倍率是确定值，不受动态生效倍率影响；否则动态倍率同样只展示 DYN。
+ */
 function paidRequestPrice(m: PlazaModel, value: number | null | undefined): string {
   if (value == null) return '-'
+  if (dynamicQuote(m)) return t('usage.dynamicRate')
   return formatScaled(value * requestRate(m), 1, MIN_DECIMALS)
+}
+
+/**
+ * 该行的报价是否取决于动态表达式。生图独立倍率由独立配置决定，
+ * 不受分组/专属动态倍率影响，照常给出确定报价。
+ */
+function dynamicQuote(m: PlazaModel): boolean {
+  return effectiveIsDynamic.value && !usesIndependentImageRate(m)
+}
+
+/** 时段行的倍率展示：动态生效倍率没有确定倍数，只能展示 DYN。 */
+function periodRateLabel(m: PlazaModel, period: PlazaTimePricingPeriod): string {
+  return dynamicQuote(m) ? t('usage.dynamicRate') : `${periodRate(period)}x`
+}
+
+function periodRateTitle(m: PlazaModel, period: PlazaTimePricingPeriod): string {
+  if (dynamicQuote(m)) return t('usage.dynamicRateTitle')
+  return t('modelPlaza.table.timePricingRateHint', {
+    rate: effectiveRate.value,
+    multiplier: period.multiplier
+  })
 }
 
 /** 官方参考价不乘倍率。 */

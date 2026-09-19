@@ -18,13 +18,13 @@ import (
 type userGroupRateRepoHotpathStub struct {
 	UserGroupRateRepository
 
-	rate  *float64
+	rate  *UserGroupRate
 	err   error
 	wait  <-chan struct{}
 	calls atomic.Int64
 }
 
-func (s *userGroupRateRepoHotpathStub) GetByUserAndGroup(ctx context.Context, userID, groupID int64) (*float64, error) {
+func (s *userGroupRateRepoHotpathStub) GetByUserAndGroup(ctx context.Context, userID, groupID int64) (*UserGroupRate, error) {
 	s.calls.Add(1)
 	if s.wait != nil {
 		<-s.wait
@@ -207,13 +207,13 @@ func resetGatewayHotpathStatsForTest() {
 	modelsListCacheStoreTotal.Store(0)
 }
 
-func TestGetUserGroupRateMultiplier_UsesCacheAndSingleflight(t *testing.T) {
+func TestResolveCustomRate_UsesCacheAndSingleflight(t *testing.T) {
 	resetGatewayHotpathStatsForTest()
 
-	rate := 1.7
+	rate := &UserGroupRate{RateMultiplier: 1.7}
 	unblock := make(chan struct{})
 	repo := &userGroupRateRepoHotpathStub{
-		rate: &rate,
+		rate: rate,
 		wait: unblock,
 	}
 	svc := &GatewayService{
@@ -227,7 +227,7 @@ func TestGetUserGroupRateMultiplier_UsesCacheAndSingleflight(t *testing.T) {
 	}
 
 	const concurrent = 12
-	results := make([]float64, concurrent)
+	results := make([]*UserGroupRate, concurrent)
 	start := make(chan struct{})
 	var wg sync.WaitGroup
 	wg.Add(concurrent)
@@ -235,7 +235,7 @@ func TestGetUserGroupRateMultiplier_UsesCacheAndSingleflight(t *testing.T) {
 		go func(idx int) {
 			defer wg.Done()
 			<-start
-			results[idx] = svc.getUserGroupRateMultiplier(context.Background(), 101, 202, 1.2)
+			results[idx] = svc.resolveCustomRate(context.Background(), 101, 202)
 		}(i)
 	}
 
@@ -258,7 +258,7 @@ func TestGetUserGroupRateMultiplier_UsesCacheAndSingleflight(t *testing.T) {
 	require.Equal(t, int64(1), repo.calls.Load())
 
 	// 再次读取应命中缓存，不再回源。
-	got := svc.getUserGroupRateMultiplier(context.Background(), 101, 202, 1.2)
+	got := svc.resolveCustomRate(context.Background(), 101, 202)
 	require.Equal(t, rate, got)
 	require.Equal(t, int64(1), repo.calls.Load())
 
@@ -270,7 +270,7 @@ func TestGetUserGroupRateMultiplier_UsesCacheAndSingleflight(t *testing.T) {
 	require.Equal(t, int64(0), fallback)
 }
 
-func TestGetUserGroupRateMultiplier_FallbackOnRepoError(t *testing.T) {
+func TestResolveCustomRate_NilOnRepoError(t *testing.T) {
 	resetGatewayHotpathStatsForTest()
 
 	repo := &userGroupRateRepoHotpathStub{
@@ -286,15 +286,14 @@ func TestGetUserGroupRateMultiplier_FallbackOnRepoError(t *testing.T) {
 		},
 	}
 
-	got := svc.getUserGroupRateMultiplier(context.Background(), 101, 202, 1.25)
-	require.Equal(t, 1.25, got)
+	require.Nil(t, svc.resolveCustomRate(context.Background(), 101, 202))
 	require.Equal(t, int64(1), repo.calls.Load())
 
 	_, _, _, _, fallback := GatewayUserGroupRateCacheStats()
 	require.Equal(t, int64(1), fallback)
 }
 
-func TestGetUserGroupRateMultiplier_CacheHitAndNilRepo(t *testing.T) {
+func TestResolveCustomRate_CacheHitAndNilRepo(t *testing.T) {
 	resetGatewayHotpathStatsForTest()
 
 	repo := &userGroupRateRepoHotpathStub{
@@ -305,10 +304,11 @@ func TestGetUserGroupRateMultiplier_CacheHitAndNilRepo(t *testing.T) {
 		userGroupRateCache: gocache.New(time.Minute, time.Minute),
 	}
 	key := "101:202"
-	svc.userGroupRateCache.Set(key, 2.3, time.Minute)
+	cached := &UserGroupRate{RateMultiplier: 2.3}
+	svc.userGroupRateCache.Set(key, cached, time.Minute)
 
-	got := svc.getUserGroupRateMultiplier(context.Background(), 101, 202, 1.1)
-	require.Equal(t, 2.3, got)
+	got := svc.resolveCustomRate(context.Background(), 101, 202)
+	require.Equal(t, cached, got)
 
 	hit, miss, load, _, fallback := GatewayUserGroupRateCacheStats()
 	require.Equal(t, int64(1), hit)
@@ -317,15 +317,15 @@ func TestGetUserGroupRateMultiplier_CacheHitAndNilRepo(t *testing.T) {
 	require.Equal(t, int64(0), fallback)
 	require.Equal(t, int64(0), repo.calls.Load())
 
-	// 无 repo 时直接返回分组默认倍率
+	// 无 repo 时无覆盖可读：返回 nil，由调用方回退分组口径。
 	svc2 := &GatewayService{
 		userGroupRateCache: gocache.New(time.Minute, time.Minute),
 	}
-	svc2.userGroupRateCache.Set(key, 1.9, time.Minute)
-	require.Equal(t, 1.9, svc2.getUserGroupRateMultiplier(context.Background(), 101, 202, 1.4))
-	require.Equal(t, 1.4, svc2.getUserGroupRateMultiplier(context.Background(), 0, 202, 1.4))
+	svc2.userGroupRateCache.Set(key, &UserGroupRate{RateMultiplier: 1.9}, time.Minute)
+	require.Equal(t, 1.9, svc2.resolveCustomRate(context.Background(), 101, 202).RateMultiplier)
+	require.Nil(t, svc2.resolveCustomRate(context.Background(), 0, 202))
 	svc2.userGroupRateCache.Delete(key)
-	require.Equal(t, 1.4, svc2.getUserGroupRateMultiplier(context.Background(), 101, 202, 1.4))
+	require.Nil(t, svc2.resolveCustomRate(context.Background(), 101, 202))
 }
 
 func TestWithWindowCostPrefetch_BatchReadAndContextReuse(t *testing.T) {

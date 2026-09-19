@@ -1270,10 +1270,16 @@ func (s *adminServiceImpl) BatchSetGroupRateMultipliers(ctx context.Context, gro
 	if s.userGroupRateRepo == nil {
 		return nil
 	}
-	for _, e := range entries {
-		if e.RateMultiplier <= 0 {
-			return fmt.Errorf("rate_multiplier must be > 0 (user_id=%d)", e.UserID)
+	// 校验并归一化：数值须为有限非负数（0 是有效覆盖），表达式须可求值。
+	for i := range entries {
+		rate := UserGroupRate{
+			RateMultiplier:     entries[i].RateMultiplier,
+			RateMultiplierExpr: strings.TrimSpace(entries[i].RateMultiplierExpr),
+		}.Normalize()
+		if err := rate.Validate(); err != nil {
+			return infraerrors.BadRequest("INVALID_USER_GROUP_RATE", fmt.Sprintf("user_id=%d: %v", entries[i].UserID, err))
 		}
+		entries[i].RateMultiplierExpr = rate.RateMultiplierExpr
 	}
 	return s.userGroupRateRepo.SyncGroupRateMultipliers(ctx, groupID, entries)
 }

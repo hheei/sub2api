@@ -37,12 +37,14 @@ type PlazaModel struct {
 // 支持模型（普通分组按分组平台隔离，Composite 分组展开关联渠道已配置的
 // 具体平台），与「可用渠道」页口径一致。
 type PlazaGroup struct {
-	ID                 int64
-	Name               string
-	Description        string
-	Platform           string
-	SubscriptionType   string
-	RateMultiplier     float64
+	ID               int64
+	Name             string
+	Description      string
+	Platform         string
+	SubscriptionType string
+	RateMultiplier   float64
+	// IsDynamic 分组默认倍率是否来自动态表达式（RateMultiplier 此时仅为回退/展示值）。
+	IsDynamic          bool
 	PeakRateEnabled    bool
 	PeakStart          string
 	PeakEnd            string
@@ -125,6 +127,7 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 			Platform:                  g.Platform,
 			SubscriptionType:          g.SubscriptionType,
 			RateMultiplier:            g.RateMultiplier,
+			IsDynamic:                 strings.TrimSpace(g.RateMultiplierExpr) != "",
 			PeakRateEnabled:           g.PeakRateEnabled,
 			PeakStart:                 g.PeakStart,
 			PeakEnd:                   g.PeakEnd,

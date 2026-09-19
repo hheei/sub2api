@@ -12,9 +12,11 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 )
 
-func (s *GatewayService) getUserGroupRateMultiplier(ctx context.Context, userID, groupID int64, groupDefaultMultiplier float64) float64 {
+// resolveCustomRate 返回 (user, group) 的专属倍率配置（未求值，可缓存）。nil 表示
+// 无用户覆盖，调用方必须让分组口径接管——用户自定义倍率永远优先于分组配置。
+func (s *GatewayService) resolveCustomRate(ctx context.Context, userID, groupID int64) *UserGroupRate {
 	if s == nil {
-		return groupDefaultMultiplier
+		return nil
 	}
 	resolver := s.userGroupRateResolver
 	if resolver == nil {
@@ -26,12 +28,29 @@ func (s *GatewayService) getUserGroupRateMultiplier(ctx context.Context, userID,
 			"service.gateway",
 		)
 	}
-	return resolver.Resolve(ctx, userID, groupID, groupDefaultMultiplier)
+	return resolver.ResolveCustom(ctx, userID, groupID)
 }
 
-// ResolveUserGroupRateMultiplier resolves the same cached multiplier used by usage billing.
-func (s *GatewayService) ResolveUserGroupRateMultiplier(ctx context.Context, userID, groupID int64, groupDefaultMultiplier float64) float64 {
-	return s.getUserGroupRateMultiplier(ctx, userID, groupID, groupDefaultMultiplier)
+// ResolveEffectiveRate 返回 (user, group) 在 $up 上游倍率下的有效计费倍率与其
+// 是否来自成功求值的动态表达式。优先级：用户专属（表达式 > 静态数值）> 分组
+// （表达式 > 静态数值）；用户覆盖存在（含 0 与等于分组默认）即胜出。
+//
+// group 为 nil（无分组配置）时按系统默认 1.0 处理。$up 必须传本次请求实际选中
+// 账号的计费倍率：表达式按账号现算，绝不缓存求值结果。
+func (s *GatewayService) ResolveEffectiveRate(ctx context.Context, userID, groupID int64, group *Group, upstream float64) (float64, bool) {
+	return resolveRateForUpstream(s.resolveCustomRate(ctx, userID, groupID), group, upstream, "service.gateway")
+}
+
+// ResolveStaticRate 返回不含 $up 的静态口径倍率：用户专属静态值（动态表达式取其
+// 声明的回退数值）> 分组静态值。供"尚未选出上游账号"的场景使用（利润门准入阈值、
+// key 计费信息查询），这类场景无从求值 $up，绝不编造求值结果。
+//
+// 第二个返回值是"用户覆盖是否存在"：覆盖为 0 或恰等于分组默认仍是覆盖，
+// 不得用 数值不等 代替存在性判断。
+func (s *GatewayService) ResolveStaticRate(ctx context.Context, userID, groupID int64, group *Group) (float64, bool) {
+	custom := s.resolveCustomRate(ctx, userID, groupID)
+	rate, _ := resolveStaticRate(custom, group)
+	return rate, custom != nil
 }
 
 // RecordUsageInput 记录使用量的输入参数。
@@ -739,18 +758,19 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		cacheTTLOverridden = (result.Usage.CacheCreation5mTokens + result.Usage.CacheCreation1hTokens) > 0
 	}
 
-	// 获取费率倍数（优先级：用户专属 > 分组默认 > 系统默认）
+	// 获取费率倍数（优先级：用户专属(表达式>数值) > 分组(表达式>静态) > 系统默认）。
+	// $up 取本次请求实际选中账号的计费倍率：表达式现算、绝不缓存求值结果，
+	// 同一 (user, group) 在不同账号上的有效倍率互不串价。
 	multiplier := 1.0
+	rateDynamic := false
 	if s.cfg != nil {
 		multiplier = s.cfg.Default.RateMultiplier
 	}
 	if apiKey.GroupID != nil && apiKey.Group != nil {
-		groupDefault := apiKey.Group.RateMultiplier
-		multiplier = s.ResolveUserGroupRateMultiplier(ctx, user.ID, *apiKey.GroupID, groupDefault)
+		multiplier, rateDynamic = s.ResolveEffectiveRate(ctx, user.ID, *apiKey.GroupID, apiKey.Group, account.BillingRateMultiplier())
 	}
-	multiplier = resolveRateMultiplierExprOrLegacy(apiKey.Group, multiplier, account.BillingRateMultiplier(), "service.gateway")
 	// token 倍率叠加高峰因子（token 计费含图片 token，图片按次倍率不受影响）。高峰因子按请求时刻现算，
-	// 不并入上面的 getUserGroupRateMultiplier，以免污染 user:group 倍率缓存。
+	// 不并入上面的专属倍率解析，以免污染 user:group 配置缓存。
 	pricingAt := input.PricingAt
 	if pricingAt.IsZero() {
 		pricingAt = timezone.Now()
@@ -817,7 +837,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	// 创建使用日志
 	accountRateMultiplier := account.BillingRateMultiplier()
 	usageLog := s.buildRecordUsageLog(ctx, input, result, apiKey, user, account, subscription,
-		requestedModel, multiplier, imageMultiplier, accountRateMultiplier, billingType, cacheTTLOverridden, cost)
+		requestedModel, multiplier, imageMultiplier, accountRateMultiplier, billingType, cacheTTLOverridden, cost, rateDynamic)
 
 	// 计算账号统计定价费用（使用最终上游模型匹配自定义规则）
 	if apiKey.GroupID != nil {
@@ -1127,6 +1147,7 @@ func (s *GatewayService) buildRecordUsageLog(
 	billingType int8,
 	cacheTTLOverridden bool,
 	cost *CostBreakdown,
+	rateDynamic bool,
 ) *UsageLog {
 	durationMs := int(result.Duration.Milliseconds())
 	requestID := resolveUsageBillingRequestID(ctx, result.RequestID)
@@ -1165,6 +1186,7 @@ func (s *GatewayService) buildRecordUsageLog(
 		ImageOutputTokens:        result.Usage.ImageOutputTokens,
 		RateMultiplier:           multiplier,
 		AccountRateMultiplier:    &accountRateMultiplier,
+		IsDynamicRate:            boolOverridePtr(rateDynamic),
 		BillingType:              billingType,
 		BillingMode:              resolveBillingMode(result, cost),
 		Stream:                   result.Stream,
@@ -1188,6 +1210,10 @@ func (s *GatewayService) buildRecordUsageLog(
 	}
 	if result.ImageCount > 0 && (cost == nil || cost.BillingMode != string(BillingModeToken)) {
 		usageLog.RateMultiplier = imageMultiplier
+		// 独立图片倍率是分组静态配置，与动态表达式无关：胜出来源随之改变。
+		if apiKey.Group != nil && apiKey.Group.ImageRateIndependent {
+			usageLog.IsDynamicRate = boolOverridePtr(false)
+		}
 	}
 	if cost != nil {
 		usageLog.InputCost = cost.InputCost

@@ -407,6 +407,20 @@ func (_c *UsageLogCreate) SetNillableAccountRateMultiplier(v *float64) *UsageLog
 	return _c
 }
 
+// SetIsDynamicRate sets the "is_dynamic_rate" field.
+func (_c *UsageLogCreate) SetIsDynamicRate(v bool) *UsageLogCreate {
+	_c.mutation.SetIsDynamicRate(v)
+	return _c
+}
+
+// SetNillableIsDynamicRate sets the "is_dynamic_rate" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableIsDynamicRate(v *bool) *UsageLogCreate {
+	if v != nil {
+		_c.SetIsDynamicRate(*v)
+	}
+	return _c
+}
+
 // SetBillingType sets the "billing_type" field.
 func (_c *UsageLogCreate) SetBillingType(v int8) *UsageLogCreate {
 	_c.mutation.SetBillingType(v)
@@ -1066,6 +1080,10 @@ func (_c *UsageLogCreate) createSpec() (*UsageLog, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.AccountRateMultiplier(); ok {
 		_spec.SetField(usagelog.FieldAccountRateMultiplier, field.TypeFloat64, value)
 		_node.AccountRateMultiplier = &value
+	}
+	if value, ok := _c.mutation.IsDynamicRate(); ok {
+		_spec.SetField(usagelog.FieldIsDynamicRate, field.TypeBool, value)
+		_node.IsDynamicRate = &value
 	}
 	if value, ok := _c.mutation.BillingType(); ok {
 		_spec.SetField(usagelog.FieldBillingType, field.TypeInt8, value)
@@ -1785,6 +1803,24 @@ func (u *UsageLogUpsert) AddAccountRateMultiplier(v float64) *UsageLogUpsert {
 // ClearAccountRateMultiplier clears the value of the "account_rate_multiplier" field.
 func (u *UsageLogUpsert) ClearAccountRateMultiplier() *UsageLogUpsert {
 	u.SetNull(usagelog.FieldAccountRateMultiplier)
+	return u
+}
+
+// SetIsDynamicRate sets the "is_dynamic_rate" field.
+func (u *UsageLogUpsert) SetIsDynamicRate(v bool) *UsageLogUpsert {
+	u.Set(usagelog.FieldIsDynamicRate, v)
+	return u
+}
+
+// UpdateIsDynamicRate sets the "is_dynamic_rate" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateIsDynamicRate() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldIsDynamicRate)
+	return u
+}
+
+// ClearIsDynamicRate clears the value of the "is_dynamic_rate" field.
+func (u *UsageLogUpsert) ClearIsDynamicRate() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldIsDynamicRate)
 	return u
 }
 
@@ -2726,6 +2762,27 @@ func (u *UsageLogUpsertOne) UpdateAccountRateMultiplier() *UsageLogUpsertOne {
 func (u *UsageLogUpsertOne) ClearAccountRateMultiplier() *UsageLogUpsertOne {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.ClearAccountRateMultiplier()
+	})
+}
+
+// SetIsDynamicRate sets the "is_dynamic_rate" field.
+func (u *UsageLogUpsertOne) SetIsDynamicRate(v bool) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetIsDynamicRate(v)
+	})
+}
+
+// UpdateIsDynamicRate sets the "is_dynamic_rate" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateIsDynamicRate() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateIsDynamicRate()
+	})
+}
+
+// ClearIsDynamicRate clears the value of the "is_dynamic_rate" field.
+func (u *UsageLogUpsertOne) ClearIsDynamicRate() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearIsDynamicRate()
 	})
 }
 
@@ -3882,6 +3939,27 @@ func (u *UsageLogUpsertBulk) UpdateAccountRateMultiplier() *UsageLogUpsertBulk {
 func (u *UsageLogUpsertBulk) ClearAccountRateMultiplier() *UsageLogUpsertBulk {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.ClearAccountRateMultiplier()
+	})
+}
+
+// SetIsDynamicRate sets the "is_dynamic_rate" field.
+func (u *UsageLogUpsertBulk) SetIsDynamicRate(v bool) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetIsDynamicRate(v)
+	})
+}
+
+// UpdateIsDynamicRate sets the "is_dynamic_rate" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateIsDynamicRate() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateIsDynamicRate()
+	})
+}
+
+// ClearIsDynamicRate clears the value of the "is_dynamic_rate" field.
+func (u *UsageLogUpsertBulk) ClearIsDynamicRate() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearIsDynamicRate()
 	})
 }
 

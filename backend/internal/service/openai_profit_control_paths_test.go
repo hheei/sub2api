@@ -234,8 +234,11 @@ type profitControlUserRateRepo struct {
 	rate *float64
 }
 
-func (r profitControlUserRateRepo) GetByUserAndGroup(context.Context, int64, int64) (*float64, error) {
-	return r.rate, nil
+func (r profitControlUserRateRepo) GetByUserAndGroup(context.Context, int64, int64) (*UserGroupRate, error) {
+	if r.rate == nil {
+		return nil, nil
+	}
+	return &UserGroupRate{RateMultiplier: *r.rate}, nil
 }
 
 // D 必须取请求用户的真实倍率：有用户覆盖时用覆盖值，绝不退回分组默认。
@@ -249,6 +252,7 @@ func TestProfitControl_GateUsesUserOverrideRate(t *testing.T) {
 	groupID := int64(7)
 	group := profitControlTestGroup(groupID, 0, 0)
 	group.RateMultiplier = 2.0
+	group.RateMultiplierExpr = "$up * 1.05"
 
 	ctx := context.WithValue(profitControlTestCtx(group), ctxkey.UserID, int64(42))
 	gate := svc.resolveOpenAIProfitControlGate(ctx, &groupID)

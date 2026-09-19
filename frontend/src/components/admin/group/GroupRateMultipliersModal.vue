@@ -49,21 +49,20 @@
               </button>
             </div>
           </div>
-          <div class="w-24">
+          <div class="w-32">
             <input
-              v-model.number="newRate"
-              type="number"
-              step="0.001"
-              min="0"
+              v-model="newRate"
+              type="text"
               autocomplete="off"
-              class="hide-spinner input w-full"
-              placeholder="1.0"
+              class="hide-spinner input w-full font-mono"
+              :placeholder="t('admin.users.customRatePlaceholder')"
+              :title="t('admin.groups.rateInputHint')"
             />
           </div>
           <button
             type="button"
             class="btn btn-primary shrink-0"
-            :disabled="!selectedUser || !newRate"
+            :disabled="!selectedUser || !newRate.trim()"
             @click="handleAddLocal"
           >
             {{ t('common.add') }}
@@ -163,19 +162,28 @@
                       </span>
                     </td>
                     <td class="whitespace-nowrap px-3 py-2">
-                      <input
-                        type="number"
-                        step="0.001"
-                        min="0.001"
-                        autocomplete="off"
-                        :value="entry.rate_multiplier ?? ''"
-                        :placeholder="String(props.group?.rate_multiplier ?? 1)"
-                        class="hide-spinner w-20 rounded border border-gray-200 bg-white px-2 py-1 text-center text-sm font-medium transition-colors focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/20 dark:border-dark-500 dark:bg-dark-700 dark:focus:border-primary-500"
-                        @change="updateLocalRate(entry.user_id, ($event.target as HTMLInputElement).value)"
-                      />
+                      <div class="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          autocomplete="off"
+                          :value="entry.rateInput"
+                          :placeholder="String(props.group?.rate_multiplier ?? 1)"
+                          :title="t('admin.groups.rateInputHint')"
+                          class="hide-spinner w-28 rounded border border-gray-200 bg-white px-2 py-1 text-center font-mono text-sm font-medium transition-colors focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/20 dark:border-dark-500 dark:bg-dark-700 dark:focus:border-primary-500"
+                          @change="updateLocalRate(entry.user_id, ($event.target as HTMLInputElement).value)"
+                        />
+                        <span
+                          v-if="entry.rate_multiplier_expr"
+                          class="inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                          :title="t('admin.groups.rateInputHint')"
+                        >
+                          {{ t('usage.dynamicRate') }}
+                        </span>
+                      </div>
                     </td>
                     <td v-if="showFinalRate" class="whitespace-nowrap px-3 py-2 font-medium text-primary-600 dark:text-primary-400">
-                      {{ computeFinalRate(entry.rate_multiplier) }}
+                      <span v-if="entry.rate_multiplier_expr" class="font-mono text-xs">{{ entry.rate_multiplier_expr }}</span>
+                      <span v-else>{{ computeFinalRate(entry.rate_multiplier) }}</span>
                     </td>
                     <td class="px-2 py-2">
                       <button
@@ -244,13 +252,17 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
 import type { GroupRateMultiplierEntry } from '@/api/admin/groups'
+import { formatRateMultiplierInput, parseUserGroupRateInput } from '@/utils/rateMultiplierInput'
 import type { AdminGroup, AdminUser } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import Icon from '@/components/icons/Icon.vue'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
 
-interface LocalEntry extends GroupRateMultiplierEntry {}
+interface LocalEntry extends GroupRateMultiplierEntry {
+  /** 输入框原文：数值、动态表达式或空串（空 = 移除该行）。 */
+  rateInput: string
+}
 
 const props = defineProps<{
   show: boolean
@@ -273,7 +285,8 @@ const searchQuery = ref('')
 const searchResults = ref<AdminUser[]>([])
 const showDropdown = ref(false)
 const selectedUser = ref<AdminUser | null>(null)
-const newRate = ref<number | null>(null)
+// 新增行的倍率输入原文：数值或动态表达式。
+const newRate = ref('')
 const currentPage = ref(1)
 const pageSize = ref(10)
 const batchFactor = ref<number | null>(null)
@@ -304,8 +317,12 @@ const computeFinalRate = (rate: number | null | undefined) => {
 // 检测是否有未保存的修改
 const isDirty = computed(() => {
   if (localEntries.value.length !== serverEntries.value.length) return true
-  const serverMap = new Map(serverEntries.value.map(e => [e.user_id, e.rate_multiplier ?? null]))
-  return localEntries.value.some(e => serverMap.get(e.user_id) !== (e.rate_multiplier ?? null))
+  const serverMap = new Map(
+    serverEntries.value.map(e => [e.user_id, `${e.rate_multiplier ?? ''}|${e.rate_multiplier_expr ?? ''}`])
+  )
+  return localEntries.value.some(
+    e => serverMap.get(e.user_id) !== `${e.rate_multiplier ?? ''}|${e.rate_multiplier_expr ?? ''}`
+  )
 })
 
 const paginatedLocalEntries = computed(() => {
@@ -314,16 +331,28 @@ const paginatedLocalEntries = computed(() => {
 })
 
 const cloneEntries = (entries: GroupRateMultiplierEntry[]): LocalEntry[] => {
-  return entries.map(e => ({ ...e }))
+  return entries.map(e => ({
+    ...e,
+    // 表达式单独存在时数值缺失，回填 1 作为回退值，避免整条覆盖被丢弃。
+    rateInput: formatRateMultiplierInput(
+      e.rate_multiplier == null && !e.rate_multiplier_expr
+        ? null
+        : { rate_multiplier: e.rate_multiplier ?? 1, rate_multiplier_expr: e.rate_multiplier_expr }
+    )
+  }))
 }
+
+/** 有数值或有表达式都算覆盖；只有两者皆空才是"无覆盖"。 */
+const hasRateOverride = (e: GroupRateMultiplierEntry) =>
+  e.rate_multiplier != null || !!e.rate_multiplier_expr
 
 const loadEntries = async () => {
   if (!props.group) return
   loading.value = true
   try {
     const raw = await adminAPI.groups.getGroupRateMultipliers(props.group.id)
-    // 仅显示已设置 rate_multiplier 的条目；rpm_override 在另一个弹窗管理，保留不动
-    serverEntries.value = raw.filter(e => e.rate_multiplier != null)
+    // 仅显示有倍率覆盖的条目（纯表达式行同样保留）；rpm_override 在另一个弹窗管理，保留不动
+    serverEntries.value = raw.filter(hasRateOverride)
     localEntries.value = cloneEntries(serverEntries.value)
     adjustPage()
   } catch (error) {
@@ -348,7 +377,7 @@ watch(() => props.show, (val) => {
     searchQuery.value = ''
     searchResults.value = []
     selectedUser.value = null
-    newRate.value = null
+    newRate.value = ''
     loadEntries()
   }
 })
@@ -384,9 +413,17 @@ const selectUser = (user: AdminUser) => {
   searchResults.value = []
 }
 
+// 单个输入框：数值 → 静态倍率（清除表达式）；表达式 → 动态倍率；留空 → 移除该行。
+const applyRateInput = (entry: LocalEntry, value: string) => {
+  entry.rateInput = value
+  const parsed = parseUserGroupRateInput(value)
+  entry.rate_multiplier = parsed?.rateMultiplier ?? null
+  entry.rate_multiplier_expr = parsed?.rateMultiplierExpr ?? ''
+}
+
 // 本地添加（或覆盖已有用户）
 const handleAddLocal = () => {
-  if (!selectedUser.value || !newRate.value) return
+  if (!selectedUser.value || !newRate.value.trim()) return
   const user = selectedUser.value
   const idx = localEntries.value.findIndex(e => e.user_id === user.id)
   const entry: LocalEntry = {
@@ -395,9 +432,13 @@ const handleAddLocal = () => {
     user_email: user.email,
     user_notes: user.notes || '',
     user_status: user.status || 'active',
-    rate_multiplier: newRate.value,
-    rpm_override: null
+    rate_multiplier: 1,
+    rate_multiplier_expr: '',
+    rpm_override: null,
+    rateInput: ''
   }
+  applyRateInput(entry, newRate.value)
+  if (entry.rate_multiplier == null) return
   if (idx >= 0) {
     localEntries.value[idx] = entry
   } else {
@@ -405,7 +446,7 @@ const handleAddLocal = () => {
   }
   searchQuery.value = ''
   selectedUser.value = null
-  newRate.value = null
+  newRate.value = ''
   adjustPage()
 }
 
@@ -413,13 +454,7 @@ const handleAddLocal = () => {
 const updateLocalRate = (userId: number, value: string) => {
   const entry = localEntries.value.find(e => e.user_id === userId)
   if (!entry) return
-  if (value.trim() === '') {
-    entry.rate_multiplier = null
-    return
-  }
-  const num = parseFloat(value)
-  if (isNaN(num)) return
-  entry.rate_multiplier = num
+  applyRateInput(entry, value)
 }
 
 // 本地删除
@@ -432,9 +467,10 @@ const removeLocal = (userId: number) => {
 const applyBatchFactor = () => {
   if (!batchFactor.value || batchFactor.value <= 0) return
   for (const entry of localEntries.value) {
-    if (entry.rate_multiplier != null) {
-      entry.rate_multiplier = parseFloat((entry.rate_multiplier * batchFactor.value).toFixed(6))
-    }
+    // 动态表达式无法在本地按倍数改写，保持原样。
+    if (entry.rate_multiplier_expr || entry.rate_multiplier == null) continue
+    entry.rate_multiplier = parseFloat((entry.rate_multiplier * batchFactor.value).toFixed(6))
+    entry.rateInput = String(entry.rate_multiplier)
   }
   batchFactor.value = null
 }
@@ -456,11 +492,13 @@ const handleSave = async () => {
   if (!props.group) return
   saving.value = true
   try {
+    // 替换式保存：纯表达式行必须一并提交，否则会被后端清空。
     const entries = localEntries.value
-      .filter(e => e.rate_multiplier != null)
+      .filter(hasRateOverride)
       .map(e => ({
         user_id: e.user_id,
-        rate_multiplier: e.rate_multiplier as number
+        rate_multiplier: e.rate_multiplier ?? 1,
+        rate_multiplier_expr: e.rate_multiplier_expr || ''
       }))
     await adminAPI.groups.batchSetGroupRateMultipliers(props.group.id, entries)
     appStore.showSuccess(t('admin.groups.rateSaved'))

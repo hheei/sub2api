@@ -39,9 +39,9 @@ type User struct {
 	UpdatedAt            time.Time
 	DeletedAt            *time.Time // 非 nil 表示用户已软删除
 
-	// GroupRates 用户专属分组倍率配置
-	// map[groupID]rateMultiplier
-	GroupRates map[int64]float64
+	// GroupRates 用户专属分组倍率配置（仅管理端接口下发）
+	// map[groupID]UserGroupRate
+	GroupRates map[int64]UserGroupRate
 
 	// TOTP 双因素认证字段
 	TotpSecretEncrypted *string    // AES-256-GCM 加密的 TOTP 密钥

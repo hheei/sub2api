@@ -111,16 +111,39 @@ func (s *OpenAIGatewayService) RecordCyberPolicyUsageLog(ctx context.Context, in
 	}
 }
 
-// ResolveUserGroupRateMultiplier resolves the same cached multiplier used by OpenAI usage billing.
-func (s *OpenAIGatewayService) ResolveUserGroupRateMultiplier(ctx context.Context, userID, groupID int64, groupDefaultMultiplier float64) float64 {
+// resolveCustomRate 返回 (user, group) 的专属倍率配置（未求值，可缓存）；nil 表示
+// 无用户覆盖，由分组口径接管。
+func (s *OpenAIGatewayService) resolveCustomRate(ctx context.Context, userID, groupID int64) *UserGroupRate {
 	if s == nil {
-		return groupDefaultMultiplier
+		return nil
 	}
 	resolver := s.userGroupRateResolver
 	if resolver == nil {
 		resolver = newUserGroupRateResolver(nil, nil, resolveUserGroupRateCacheTTL(s.cfg), nil, "service.openai_gateway")
 	}
-	return resolver.Resolve(ctx, userID, groupID, groupDefaultMultiplier)
+	return resolver.ResolveCustom(ctx, userID, groupID)
+}
+
+// ResolveEffectiveRate 返回 (user, group) 在 $up 上游倍率下的有效计费倍率与其
+// 是否来自成功求值的动态表达式。优先级：用户专属（表达式 > 静态数值）> 分组
+// （表达式 > 静态数值）；用户覆盖存在（含 0 与等于分组默认）即胜出。
+//
+// group 为 nil（无分组配置）时按系统默认 1.0 处理。$up 必须传本次请求实际选中
+// 账号的计费倍率：表达式按账号现算，绝不缓存求值结果。
+func (s *OpenAIGatewayService) ResolveEffectiveRate(ctx context.Context, userID, groupID int64, group *Group, upstream float64) (float64, bool) {
+	return resolveRateForUpstream(s.resolveCustomRate(ctx, userID, groupID), group, upstream, "service.openai_gateway")
+}
+
+// ResolveStaticRate 返回不含 $up 的静态口径倍率：用户专属静态值（动态表达式取其
+// 声明的回退数值）> 分组静态值。供尚未选出上游账号的场景（利润门准入阈值、
+// key 计费信息查询）使用，这类场景绝不编造 $up 求值结果。
+//
+// 第二个返回值是"用户覆盖是否存在"：覆盖为 0 或恰等于分组默认仍是覆盖，
+// 不得用 数值不等 代替存在性判断。
+func (s *OpenAIGatewayService) ResolveStaticRate(ctx context.Context, userID, groupID int64, group *Group) (float64, bool) {
+	custom := s.resolveCustomRate(ctx, userID, groupID)
+	rate, _ := resolveStaticRate(custom, group)
+	return rate, custom != nil
 }
 
 // openAIUsagePricingAt 返回本次用量记录使用的定价时刻：优先请求级 PricingAt
@@ -194,19 +217,20 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		ImageOutputTokens:    result.Usage.ImageOutputTokens,
 	}
 
-	// Get rate multiplier
+	// Get rate multiplier（用户专属(表达式>数值) > 分组(表达式>静态) > 系统默认）；
+	// $up 取本次实际选中账号的计费倍率，表达式现算不缓存。
 	multiplier := 1.0
+	rateDynamic := false
 	if s.cfg != nil {
 		multiplier = s.cfg.Default.RateMultiplier
 	}
 	if apiKey.GroupID != nil && apiKey.Group != nil {
-		multiplier = s.ResolveUserGroupRateMultiplier(ctx, user.ID, *apiKey.GroupID, apiKey.Group.RateMultiplier)
+		multiplier, rateDynamic = s.ResolveEffectiveRate(ctx, user.ID, *apiKey.GroupID, apiKey.Group, account.BillingRateMultiplier())
 	}
-	multiplier = resolveRateMultiplierExprOrLegacy(apiKey.Group, multiplier, account.BillingRateMultiplier(), "service.openai_gateway")
 	// token 倍率叠加高峰因子（token 计费含图片 token，图片按次倍率不受影响）。
 	// 高峰因子按请求级 PricingAt 现算（与利润门 D 同源同刻，跨峰谷请求不中途
 	// 变价）；未装配 PricingAt 的路径回退记录时刻，保持既有行为。不并入上面的
-	// Resolve，以免污染 user:group 倍率缓存。
+	// 专属倍率解析，以免污染 user:group 配置缓存。
 	baseMultiplier := multiplier
 	pricingAt := openAIUsagePricingAt(input)
 	multiplier, imageMultiplier := computePeakAwareMultipliers(apiKey, baseMultiplier, pricingAt)
@@ -424,10 +448,19 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		usageLog.ActualCost = cost.ActualCost
 		usageLog.LongContextBillingApplied = cost.LongContextBillingApplied
 	}
+	// 落库该请求真实使用的倍率与其来源：token 口径沿用动态标记；独立视频/图片
+	// 倍率是分组静态配置，与用户/分组动态表达式无关，标记随之归 static。
+	usageLog.IsDynamicRate = boolOverridePtr(rateDynamic)
 	if isVideoUsage && (cost == nil || cost.BillingMode != string(BillingModeToken)) {
 		usageLog.RateMultiplier = videoMultiplier
+		if apiKey.Group != nil && apiKey.Group.VideoRateIndependent {
+			usageLog.IsDynamicRate = boolOverridePtr(false)
+		}
 	} else if result.ImageCount > 0 && (cost == nil || cost.BillingMode != string(BillingModeToken)) {
 		usageLog.RateMultiplier = imageMultiplier
+		if apiKey.Group != nil && apiKey.Group.ImageRateIndependent {
+			usageLog.IsDynamicRate = boolOverridePtr(false)
+		}
 	} else {
 		usageLog.RateMultiplier = multiplier
 	}

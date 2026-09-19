@@ -63,8 +63,12 @@ export interface ModelPlazaGroup {
   /** 'standard' | 'subscription' */
   subscription_type: string
   rate_multiplier: number
-  /** 登录且管理员为该用户配了专属倍率时返回；生效倍率 = user_rate ?? rate_multiplier。 */
+  /** 分组默认倍率来自动态表达式；此时 rate_multiplier 仅为回退/展示值。 */
+  is_dynamic?: boolean
+  /** 登录且管理员为该用户配了专属倍率时返回（0 也算覆盖）；生效倍率 = user_rate ?? rate_multiplier。 */
   user_rate_multiplier?: number
+  /** 用户专属倍率来自动态表达式；user_rate_multiplier 仅为回退/展示值。 */
+  user_rate_is_dynamic?: boolean
   peak_rate_enabled: boolean
   peak_start: string
   peak_end: string

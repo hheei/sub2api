@@ -4323,6 +4323,7 @@ import type { ChannelModelPricing } from "@/api/admin/channels";
 import { VueDraggable } from "vue-draggable-plus";
 import { createStableObjectKeyResolver } from "@/utils/stableObjectKey";
 import { extractApiErrorMessage } from "@/utils/apiError";
+import { parseRateMultiplierInput } from "@/utils/rateMultiplierInput";
 import { useKeyedDebouncedSearch } from "@/composables/useKeyedDebouncedSearch";
 import { getPersistedPageSize } from "@/composables/usePersistedPageSize";
 import {
@@ -4933,21 +4934,6 @@ const submitEditAllowlistCustomEntry = () => {
     editAllowlistCustomErrorKey.value = `admin.groups.modelAllowlist.errors.${error}`;
   }
 };
-
-function parseRateMultiplierInput(input: string | number | null | undefined): {
-  rateMultiplier: number;
-  rateMultiplierExpr: string;
-} {
-  const trimmed = String(input ?? "").trim();
-  if (!trimmed) {
-    return { rateMultiplier: 1.0, rateMultiplierExpr: "" };
-  }
-  const num = Number(trimmed);
-  if (!isNaN(num) && Number.isFinite(num) && num > 0) {
-    return { rateMultiplier: num, rateMultiplierExpr: "" };
-  }
-  return { rateMultiplier: 1.0, rateMultiplierExpr: trimmed };
-}
 
 const createForm = reactive({
   name: "",

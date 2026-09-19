@@ -105,8 +105,8 @@ export interface AdminUser extends User {
   // 管理员备注（普通用户接口不返回）
   notes: string
   last_used_at?: string | null
-  // 用户专属分组倍率配置 (group_id -> rate_multiplier)
-  group_rates?: Record<number, number>
+  // 用户专属分组倍率配置 (group_id -> {rate_multiplier, rate_multiplier_expr})
+  group_rates?: Record<number, UserGroupRate>
   // 为 true 时该用户仅可使用 allowed_groups 中列出的公开分组。
   // 管理侧权限开关，普通用户接口不返回。
   restrict_public_groups?: boolean
@@ -543,6 +543,24 @@ export type GroupPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 
 export type VideoModelPrices = Record<string, Record<string, number>>
 
 export type SubscriptionType = 'standard' | 'subscription'
+
+/**
+ * 管理员配置的用户专属倍率（仅管理侧接口返回，含原始表达式）。
+ * rate_multiplier_expr 非空时优先于 rate_multiplier（表达式求值失败时回退到数值）。
+ */
+export interface UserGroupRate {
+  rate_multiplier: number
+  rate_multiplier_expr: string
+}
+
+/**
+ * 普通用户可见的专属倍率条目：只暴露生效数值与动态标记，绝不下发原始表达式。
+ * is_dynamic 为 true 时 rate_multiplier 仅为回退/展示值。
+ */
+export interface UserGroupRateDisplay {
+  rate_multiplier: number
+  is_dynamic?: boolean
+}
 
 export interface OpenAIMessagesDispatchModelConfig {
   opus_mapped_model?: string
@@ -1721,7 +1739,8 @@ export interface UsageLog {
   total_cost: number
   actual_cost: number
   rate_multiplier: number
-  is_dynamic_rate?: boolean
+  /** null = 旧记录未记录动态标记（未知，不可由当前分组配置推断）。 */
+  is_dynamic_rate?: boolean | null
   long_context_billing_applied: boolean
   billing_type: number
 
@@ -2040,9 +2059,9 @@ export interface UpdateUserRequest {
   status?: 'active' | 'disabled'
   allowed_groups?: number[] | null
   restrict_public_groups?: boolean
-  // 用户专属分组倍率配置 (group_id -> rate_multiplier | null)
-  // null 表示删除该分组的专属倍率
-  group_rates?: Record<number, number | null>
+  // 用户专属分组倍率配置 (group_id -> 配置对象 | null)
+  // null 表示删除该分组的专属倍率覆盖
+  group_rates?: Record<number, UserGroupRate | null>
 }
 
 export interface ChangePasswordRequest {

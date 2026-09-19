@@ -104,7 +104,7 @@ func TestToModelPlazaGroupDTO_UserRateAndFieldWhitelist(t *testing.T) {
 	}
 
 	// 有专属倍率:user_rate_multiplier 序列化输出
-	dto := toModelPlazaGroupDTO(&g, map[int64]float64{2: 0.5})
+	dto := toModelPlazaGroupDTO(&g, map[int64]service.UserGroupRateDisplay{2: {RateMultiplier: 0.5}})
 	raw, err := json.Marshal(dto)
 	require.NoError(t, err)
 	var decoded map[string]any
@@ -147,6 +147,30 @@ func TestToModelPlazaGroupDTO_UserRateAndFieldWhitelist(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rawNoRate, &decodedNoRate))
 	_, hasRate := decodedNoRate["user_rate_multiplier"]
 	require.False(t, hasRate, "无专属倍率时 user_rate_multiplier 应 omitempty")
+
+	// 动态专属倍率:只下发数值+动态标记,绝不含原始表达式
+	dynDTO := toModelPlazaGroupDTO(&g, map[int64]service.UserGroupRateDisplay{
+		2: {RateMultiplier: 1.1, IsDynamic: true},
+	})
+	dynRaw, err := json.Marshal(dynDTO)
+	require.NoError(t, err)
+	var dynDecoded map[string]any
+	require.NoError(t, json.Unmarshal(dynRaw, &dynDecoded))
+	require.InDelta(t, 1.1, dynDecoded["user_rate_multiplier"].(float64), 1e-9)
+	require.Equal(t, true, dynDecoded["user_rate_is_dynamic"])
+	require.NotContains(t, dynDecoded, "user_rate_multiplier_expr")
+	require.NotContains(t, dynDecoded, "rate_multiplier_expr")
+	require.NotContains(t, string(dynRaw), "$up")
+
+	// 分组默认倍率为动态表达式时仅暴露 is_dynamic
+	gDyn := g
+	gDyn.IsDynamic = true
+	dynGroupRaw, err := json.Marshal(toModelPlazaGroupDTO(&gDyn, nil))
+	require.NoError(t, err)
+	var dynGroupDecoded map[string]any
+	require.NoError(t, json.Unmarshal(dynGroupRaw, &dynGroupDecoded))
+	require.Equal(t, true, dynGroupDecoded["is_dynamic"])
+	require.NotContains(t, dynGroupDecoded, "rate_multiplier_expr")
 }
 
 func TestToModelPlazaOfficialPricing_NilPassthrough(t *testing.T) {

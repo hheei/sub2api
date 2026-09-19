@@ -74,6 +74,8 @@ const (
 	FieldLongContextBillingApplied = "long_context_billing_applied"
 	// FieldAccountRateMultiplier holds the string denoting the account_rate_multiplier field in the database.
 	FieldAccountRateMultiplier = "account_rate_multiplier"
+	// FieldIsDynamicRate holds the string denoting the is_dynamic_rate field in the database.
+	FieldIsDynamicRate = "is_dynamic_rate"
 	// FieldBillingType holds the string denoting the billing_type field in the database.
 	FieldBillingType = "billing_type"
 	// FieldStream holds the string denoting the stream field in the database.
@@ -190,6 +192,7 @@ var Columns = []string{
 	FieldRateMultiplier,
 	FieldLongContextBillingApplied,
 	FieldAccountRateMultiplier,
+	FieldIsDynamicRate,
 	FieldBillingType,
 	FieldStream,
 	FieldDurationMs,
@@ -448,6 +451,11 @@ func ByLongContextBillingApplied(opts ...sql.OrderTermOption) OrderOption {
 // ByAccountRateMultiplier orders the results by the account_rate_multiplier field.
 func ByAccountRateMultiplier(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAccountRateMultiplier, opts...).ToFunc()
+}
+
+// ByIsDynamicRate orders the results by the is_dynamic_rate field.
+func ByIsDynamicRate(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIsDynamicRate, opts...).ToFunc()
 }
 
 // ByBillingType orders the results by the billing_type field.

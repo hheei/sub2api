@@ -1095,9 +1095,10 @@ func (s *APIKeyService) GetUserGroupVisibility(ctx context.Context, userID int64
 	return allowed, user.RestrictPublicGroups, nil
 }
 
-// GetUserGroupRates 获取用户的专属分组倍率配置
-// 返回 map[groupID]rateMultiplier
-func (s *APIKeyService) GetUserGroupRates(ctx context.Context, userID int64) (map[int64]float64, error) {
+// GetUserGroupRates 获取用户的专属分组倍率配置（面向普通用户）。
+// 返回 map[groupID]UserGroupRateDisplay：只含数值与动态标记，绝不下发原始表达式。
+// 动态倍率的数值为该配置的静态回退值（具体值取决于所选上游账号，此处无法求值）。
+func (s *APIKeyService) GetUserGroupRates(ctx context.Context, userID int64) (map[int64]UserGroupRateDisplay, error) {
 	if s.userGroupRateRepo == nil {
 		return nil, nil
 	}
@@ -1105,7 +1106,14 @@ func (s *APIKeyService) GetUserGroupRates(ctx context.Context, userID int64) (ma
 	if err != nil {
 		return nil, fmt.Errorf("get user group rates: %w", err)
 	}
-	return rates, nil
+	out := make(map[int64]UserGroupRateDisplay, len(rates))
+	for groupID, rate := range rates {
+		out[groupID] = UserGroupRateDisplay{
+			RateMultiplier: rate.RateMultiplier,
+			IsDynamic:      rate.IsDynamic(),
+		}
+	}
+	return out, nil
 }
 
 // CheckAPIKeyQuotaAndExpiry checks if the API key is valid for use (not expired, quota not exhausted)

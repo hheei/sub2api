@@ -76,18 +76,23 @@ type modelPlazaModel struct {
 
 // modelPlazaGroup 广场分组条目（白名单字段）。
 type modelPlazaGroup struct {
-	ID                 int64    `json:"id"`
-	Name               string   `json:"name"`
-	Description        string   `json:"description"`
-	Platform           string   `json:"platform"`
-	SubscriptionType   string   `json:"subscription_type"`
-	RateMultiplier     float64  `json:"rate_multiplier"`
+	ID               int64   `json:"id"`
+	Name             string  `json:"name"`
+	Description      string  `json:"description"`
+	Platform         string  `json:"platform"`
+	SubscriptionType string  `json:"subscription_type"`
+	RateMultiplier   float64 `json:"rate_multiplier"`
+	// IsDynamic 分组默认倍率来自表达式；此时 rate_multiplier 仅为回退/展示值。
+	IsDynamic bool `json:"is_dynamic,omitempty"`
+	// UserRateMultiplier 用户专属倍率；仅在该分组存在专属覆盖时下发（0 也算覆盖）。
 	UserRateMultiplier *float64 `json:"user_rate_multiplier,omitempty"`
-	PeakRateEnabled    bool     `json:"peak_rate_enabled"`
-	PeakStart          string   `json:"peak_start"`
-	PeakEnd            string   `json:"peak_end"`
-	PeakRateMultiplier float64  `json:"peak_rate_multiplier"`
-	IsExclusive        bool     `json:"is_exclusive"`
+	// UserRateIsDynamic 用户专属倍率来自表达式；user_rate_multiplier 仅为回退/展示值。
+	UserRateIsDynamic  bool    `json:"user_rate_is_dynamic,omitempty"`
+	PeakRateEnabled    bool    `json:"peak_rate_enabled"`
+	PeakStart          string  `json:"peak_start"`
+	PeakEnd            string  `json:"peak_end"`
+	PeakRateMultiplier float64 `json:"peak_rate_multiplier"`
+	IsExclusive        bool    `json:"is_exclusive"`
 	// 生图独立倍率：为 true 时图片计费模型的实付倍率取 ImageRateMultiplier，
 	// 不取分组/用户专属倍率。
 	ImageRateIndependent bool    `json:"image_rate_independent"`
@@ -131,7 +136,7 @@ func (h *ModelPlazaHandler) Get(c *gin.Context) {
 	// allowedGroups == nil 表示匿名；登录用户恒为非 nil（可能为空集合）。
 	var allowedGroups map[int64]struct{}
 	var restrictPublicGroups bool
-	var userRates map[int64]float64
+	var userRates map[int64]service.UserGroupRateDisplay
 	if authed {
 		allowedGroups, restrictPublicGroups, err = h.apiKeyService.GetUserGroupVisibility(c.Request.Context(), subject.UserID)
 		if err != nil {
@@ -184,7 +189,8 @@ func filterPlazaVisibleGroups(
 }
 
 // toModelPlazaGroupDTO 将 service 层广场分组映射为白名单 DTO,并合并用户专属倍率。
-func toModelPlazaGroupDTO(g *service.PlazaGroup, userRates map[int64]float64) modelPlazaGroup {
+// userRates 只含数值与动态标记，不含原始表达式。
+func toModelPlazaGroupDTO(g *service.PlazaGroup, userRates map[int64]service.UserGroupRateDisplay) modelPlazaGroup {
 	models := make([]modelPlazaModel, 0, len(g.Models))
 	for i := range g.Models {
 		m := &g.Models[i]
@@ -204,6 +210,7 @@ func toModelPlazaGroupDTO(g *service.PlazaGroup, userRates map[int64]float64) mo
 		Platform:                  g.Platform,
 		SubscriptionType:          g.SubscriptionType,
 		RateMultiplier:            g.RateMultiplier,
+		IsDynamic:                 g.IsDynamic,
 		PeakRateEnabled:           g.PeakRateEnabled,
 		PeakStart:                 g.PeakStart,
 		PeakEnd:                   g.PeakEnd,
@@ -215,7 +222,9 @@ func toModelPlazaGroupDTO(g *service.PlazaGroup, userRates map[int64]float64) mo
 		Models:                    models,
 	}
 	if rate, ok := userRates[g.ID]; ok {
-		dto.UserRateMultiplier = &rate
+		value := rate.RateMultiplier
+		dto.UserRateMultiplier = &value
+		dto.UserRateIsDynamic = rate.IsDynamic
 	}
 	return dto
 }

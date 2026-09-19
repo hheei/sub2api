@@ -168,7 +168,8 @@
                   :platform="row.group.platform"
                   :subscription-type="row.group.subscription_type"
                   :rate-multiplier="row.group.rate_multiplier"
-                  :user-rate-multiplier="userGroupRates[row.group.id]"
+                  :user-rate-multiplier="userGroupRates[row.group.id]?.rate_multiplier ?? null"
+                  :user-rate-is-dynamic="userGroupRates[row.group.id]?.is_dynamic === true"
                   :is-dynamic="row.group.is_dynamic"
                   :peak-rate-enabled="row.group.peak_rate_enabled"
                   :peak-start="row.group.peak_start"
@@ -556,6 +557,8 @@
                 :subscription-type="(option as unknown as GroupOption).subscriptionType"
                 :rate-multiplier="(option as unknown as GroupOption).rate"
                 :user-rate-multiplier="(option as unknown as GroupOption).userRate"
+                :is-dynamic="(option as unknown as GroupOption).isDynamic"
+                :user-rate-is-dynamic="(option as unknown as GroupOption).userRateIsDynamic"
                 :peak-rate-enabled="(option as unknown as GroupOption).peakRateEnabled"
                 :peak-start="(option as unknown as GroupOption).peakStart"
                 :peak-end="(option as unknown as GroupOption).peakEnd"
@@ -570,6 +573,8 @@
                 :subscription-type="(option as unknown as GroupOption).subscriptionType"
                 :rate-multiplier="(option as unknown as GroupOption).rate"
                 :user-rate-multiplier="(option as unknown as GroupOption).userRate"
+                :is-dynamic="(option as unknown as GroupOption).isDynamic"
+                :user-rate-is-dynamic="(option as unknown as GroupOption).userRateIsDynamic"
                 :peak-rate-enabled="(option as unknown as GroupOption).peakRateEnabled"
                 :peak-start="(option as unknown as GroupOption).peakStart"
                 :peak-end="(option as unknown as GroupOption).peakEnd"
@@ -1177,6 +1182,8 @@
               :subscription-type="option.subscriptionType"
               :rate-multiplier="option.rate"
               :user-rate-multiplier="option.userRate"
+              :is-dynamic="option.isDynamic"
+              :user-rate-is-dynamic="option.userRateIsDynamic"
               :peak-rate-enabled="option.peakRateEnabled"
               :peak-start="option.peakStart"
               :peak-end="option.peakEnd"
@@ -1223,7 +1230,7 @@ import BulkEditKeysModal from '@/components/keys/BulkEditKeysModal.vue'
 	import EndpointPopover from '@/components/keys/EndpointPopover.vue'
 	import GroupBadge from '@/components/common/GroupBadge.vue'
 	import GroupOptionItem from '@/components/common/GroupOptionItem.vue'
-	import type { ApiKey, Group, PublicSettings, SubscriptionType, GroupPlatform, UpdateApiKeyRequest } from '@/types'
+	import type { ApiKey, Group, PublicSettings, SubscriptionType, GroupPlatform, UpdateApiKeyRequest, UserGroupRateDisplay } from '@/types'
 import type { Column } from '@/components/common/types'
 import type { BatchApiKeyUsageStats } from '@/api/usage'
 import { formatDateTime } from '@/utils/format'
@@ -1249,6 +1256,10 @@ interface GroupOption {
   description: string | null
   rate: number
   userRate: number | null
+  /** 分组默认倍率来自表达式。 */
+  isDynamic: boolean
+  /** 用户专属倍率为表达式；userRate 仅为其回退/展示值。 */
+  userRateIsDynamic: boolean
   peakRateEnabled: boolean
   peakStart: string
   peakEnd: string
@@ -1377,7 +1388,7 @@ const submitting = ref(false)
 const now = ref(new Date())
 let resetTimer: ReturnType<typeof setInterval> | null = null
 const usageStats = ref<Record<string, BatchApiKeyUsageStats>>({})
-const userGroupRates = ref<Record<number, number>>({})
+const userGroupRates = ref<Record<number, UserGroupRateDisplay>>({})
 
 const pagination = ref({
   page: 1,
@@ -1516,7 +1527,10 @@ const groupOptions = computed(() =>
     label: group.name,
     description: group.description,
     rate: group.rate_multiplier,
-    userRate: userGroupRates.value[group.id] ?? null,
+    // 专属倍率有无只看键是否存在：0 与等于分组默认值同样是覆盖。
+    userRate: userGroupRates.value[group.id]?.rate_multiplier ?? null,
+    isDynamic: group.is_dynamic === true,
+    userRateIsDynamic: userGroupRates.value[group.id]?.is_dynamic === true,
     peakRateEnabled: group.peak_rate_enabled,
     peakStart: group.peak_start,
     peakEnd: group.peak_end,

@@ -45,9 +45,9 @@ type AdminUser struct {
 
 	Notes      string     `json:"notes"`
 	LastUsedAt *time.Time `json:"last_used_at"`
-	// GroupRates 用户专属分组倍率配置
-	// map[groupID]rateMultiplier
-	GroupRates map[int64]float64 `json:"group_rates,omitempty"`
+	// GroupRates 用户专属分组倍率配置（仅管理端下发）
+	// map[groupID]{rate_multiplier, rate_multiplier_expr}
+	GroupRates map[int64]service.UserGroupRate `json:"group_rates,omitempty"`
 	// RestrictPublicGroups 为 true 时，该用户仅可使用 allowed_groups 中列出的
 	// 公开分组。这是管理侧的权限开关，不下发给用户自身的接口。
 	RestrictPublicGroups bool `json:"restrict_public_groups"`
@@ -615,15 +615,18 @@ type UsageLog struct {
 	CacheCreation5mTokens int `json:"cache_creation_5m_tokens"`
 	CacheCreation1hTokens int `json:"cache_creation_1h_tokens"`
 
-	InputCost                 float64 `json:"input_cost"`
-	OutputCost                float64 `json:"output_cost"`
-	CacheCreationCost         float64 `json:"cache_creation_cost"`
-	CacheReadCost             float64 `json:"cache_read_cost"`
-	TotalCost                 float64 `json:"total_cost"`
-	ActualCost                float64 `json:"actual_cost"`
-	RateMultiplier            float64 `json:"rate_multiplier"`
-	IsDynamicRate             bool    `json:"is_dynamic_rate,omitempty"`
-	LongContextBillingApplied bool    `json:"long_context_billing_applied"`
+	InputCost         float64 `json:"input_cost"`
+	OutputCost        float64 `json:"output_cost"`
+	CacheCreationCost float64 `json:"cache_creation_cost"`
+	CacheReadCost     float64 `json:"cache_read_cost"`
+	TotalCost         float64 `json:"total_cost"`
+	ActualCost        float64 `json:"actual_cost"`
+	RateMultiplier    float64 `json:"rate_multiplier"`
+	// IsDynamicRate is the stored per-request flag: nil for historical rows whose
+	// dynamic-ness is unknown, explicit true/false for newly billed rows. It is
+	// never derived from the (mutable) group configuration.
+	IsDynamicRate             *bool `json:"is_dynamic_rate,omitempty"`
+	LongContextBillingApplied bool  `json:"long_context_billing_applied"`
 
 	BillingType  int8   `json:"billing_type"`
 	RequestType  string `json:"request_type"`

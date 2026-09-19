@@ -709,7 +709,7 @@ func usageLogFromServiceUser(l *service.UsageLog) UsageLog {
 		TotalCost:                 l.TotalCost,
 		ActualCost:                l.ActualCost,
 		RateMultiplier:            l.RateMultiplier,
-		IsDynamicRate:             l.Group != nil && strings.TrimSpace(l.Group.RateMultiplierExpr) != "",
+		IsDynamicRate:             l.IsDynamicRate,
 		LongContextBillingApplied: l.LongContextBillingApplied,
 		BillingType:               l.BillingType,
 		RequestType:               requestType.String(),

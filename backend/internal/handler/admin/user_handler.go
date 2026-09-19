@@ -86,8 +86,8 @@ type UpdateUserRequest struct {
 	AllowedGroups        *[]int64 `json:"allowed_groups"`
 	RestrictPublicGroups *bool    `json:"restrict_public_groups"`
 	// GroupRates 用户专属分组倍率配置
-	// map[groupID]*rate，nil 表示删除该分组的专属倍率
-	GroupRates map[int64]*float64 `json:"group_rates"`
+	// map[groupID]*{rate_multiplier, rate_multiplier_expr}，null 表示删除该分组的专属倍率覆盖
+	GroupRates map[int64]*service.UserGroupRate `json:"group_rates"`
 }
 
 // UpdateBalanceRequest represents balance update request

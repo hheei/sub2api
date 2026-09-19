@@ -75,18 +75,19 @@
                   </div>
                 </div>
 
-                <!-- 专属倍率输入 -->
+                <!-- 专属倍率输入：数值或动态表达式（如 $up * 1.05），留空清除覆盖 -->
                 <div class="flex flex-shrink-0 items-center gap-3">
                   <label class="text-sm font-medium text-gray-600 dark:text-gray-400">{{ t('admin.users.customRate') }}</label>
                   <input
-                    type="number"
-                    step="0.001"
-                    min="0.001"
-                    :value="config.customRate ?? ''"
+                    type="text"
+                    :value="config.customRateInput"
                     @input="updateCustomRate(config.groupId, ($event.target as HTMLInputElement).value)"
-                    :placeholder="String(config.defaultRate)"
-                    class="hide-spinner w-24 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-dark-500 dark:bg-dark-700 dark:focus:border-primary-500"
+                    :placeholder="t('admin.users.customRatePlaceholder')"
+                    class="hide-spinner w-32 rounded-lg border border-gray-300 bg-white px-3 py-2 font-mono text-sm font-medium transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-dark-500 dark:bg-dark-700 dark:focus:border-primary-500"
                   />
+                  <span v-if="config.customRateExpr" class="inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" :title="t('admin.users.customRateDynamicTitle')">
+                    {{ t('admin.users.customRateDynamic') }}
+                  </span>
                 </div>
               </div>
             </div>
@@ -155,18 +156,19 @@
                   </div>
                 </div>
 
-                <!-- 专属倍率输入 -->
+                <!-- 专属倍率输入：数值或动态表达式（如 $up * 1.05），留空清除覆盖 -->
                 <div class="flex flex-shrink-0 items-center gap-3">
                   <label class="text-sm font-medium text-gray-600 dark:text-gray-400">{{ t('admin.users.customRate') }}</label>
                   <input
-                    type="number"
-                    step="0.001"
-                    min="0.001"
-                    :value="config.customRate ?? ''"
+                    type="text"
+                    :value="config.customRateInput"
                     @input="updateCustomRate(config.groupId, ($event.target as HTMLInputElement).value)"
-                    :placeholder="String(config.defaultRate)"
-                    class="hide-spinner w-24 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-dark-500 dark:bg-dark-700 dark:focus:border-primary-500"
+                    :placeholder="t('admin.users.customRatePlaceholder')"
+                    class="hide-spinner w-32 rounded-lg border border-gray-300 bg-white px-3 py-2 font-mono text-sm font-medium transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-dark-500 dark:bg-dark-700 dark:focus:border-primary-500"
                   />
+                  <span v-if="config.customRateExpr" class="inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" :title="t('admin.users.customRateDynamicTitle')">
+                    {{ t('admin.users.customRateDynamic') }}
+                  </span>
                 </div>
               </div>
             </div>
@@ -205,7 +207,8 @@ import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
-import type { AdminUser, Group, GroupPlatform } from '@/types'
+import type { AdminUser, Group, GroupPlatform, UserGroupRate } from '@/types'
+import { formatRateMultiplierInput, parseUserGroupRateInput } from '@/utils/rateMultiplierInput'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
 
@@ -215,7 +218,12 @@ interface GroupRateConfig {
   platform: GroupPlatform
   isExclusive: boolean
   defaultRate: number
+  /** 输入框原文：数值、动态表达式或空串（空 = 无专属覆盖）。 */
+  customRateInput: string
+  /** 解析出的数值，空白表达式时为回退值；null 表示无覆盖。 */
   customRate: number | null
+  /** 解析出的表达式；非空时 customRate 仅为其回退值。 */
+  customRateExpr: string
   isSelected: boolean
 }
 
@@ -226,7 +234,8 @@ const appStore = useAppStore()
 
 const groups = ref<Group[]>([])
 const groupConfigs = ref<GroupRateConfig[]>([])
-const originalGroupRates = ref<Record<number, number>>({}) // 记录原始专属倍率，用于检测删除
+// 记录原始专属倍率：只要键存在即代表后端有覆盖（含 0），用于检测删除。
+const originalGroupRates = ref<Record<number, UserGroupRate>>({})
 const loading = ref(false)
 const submitting = ref(false)
 const restrictPublicGroups = ref(false)
@@ -268,7 +277,9 @@ const load = async () => {
       platform: g.platform,
       isExclusive: g.is_exclusive,
       defaultRate: g.rate_multiplier,
-      customRate: userGroupRates[g.id] ?? null,
+      customRateInput: formatRateMultiplierInput(userGroupRates[g.id]),
+      customRate: userGroupRates[g.id]?.rate_multiplier ?? null,
+      customRateExpr: userGroupRates[g.id]?.rate_multiplier_expr ?? '',
       // 专属分组：检查是否在 allowed_groups 中
       // 公开分组：未开启限制时恒可用；开启后同样以 allowed_groups 为准
       isSelected:
@@ -305,16 +316,14 @@ const toggleRestrictPublicGroups = () => {
   }
 }
 
+// 单个输入框：数值 → 静态倍率（清除表达式）；表达式 → 动态倍率；留空 → 清除覆盖。
 const updateCustomRate = (groupId: number, value: string) => {
   const config = groupConfigs.value.find((c) => c.groupId === groupId)
-  if (config) {
-    if (value === '' || value === null || value === undefined) {
-      config.customRate = null
-    } else {
-      const numValue = parseFloat(value)
-      config.customRate = isNaN(numValue) ? null : numValue
-    }
-  }
+  if (!config) return
+  config.customRateInput = value
+  const parsed = parseUserGroupRateInput(value)
+  config.customRate = parsed?.rateMultiplier ?? null
+  config.customRateExpr = parsed?.rateMultiplierExpr ?? ''
 }
 
 const handleSave = async () => {
@@ -329,15 +338,17 @@ const handleSave = async () => {
       .map((c) => c.groupId)
 
     // 构建 group_rates
-    // - 有新专属倍率: 设置为该值
-    // - 原本有专属倍率但现在被清空: 设置为 null（表示删除）
-    const groupRates: Record<number, number | null> = {}
+    // - 有专属倍率: 提交 {rate_multiplier, rate_multiplier_expr}（数值会清除表达式）
+    // - 原本有覆盖但现在被清空: 提交 null（表示删除）
+    const groupRates: Record<number, UserGroupRate | null> = {}
     for (const c of groupConfigs.value) {
       const hadOriginalRate = originalGroupRates.value[c.groupId] !== undefined
 
       if (c.customRate !== null) {
-        // 有专属倍率
-        groupRates[c.groupId] = c.customRate
+        groupRates[c.groupId] = {
+          rate_multiplier: c.customRate,
+          rate_multiplier_expr: c.customRateExpr
+        }
       } else if (hadOriginalRate) {
         // 原本有专属倍率，现在被清空，需要显式删除
         groupRates[c.groupId] = null
