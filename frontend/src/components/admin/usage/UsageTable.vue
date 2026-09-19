@@ -210,6 +210,12 @@
             <div class="flex items-center gap-1.5">
               <span class="font-medium text-green-600 dark:text-green-400">${{ row.actual_cost?.toFixed(6) || '0.000000' }}</span>
               <span
+                v-if="row.is_dynamic_rate"
+                data-testid="dynamic-rate-marker"
+                class="inline-flex items-center rounded px-1 py-px text-[10px] font-semibold leading-tight bg-blue-100 text-blue-700 ring-1 ring-inset ring-blue-200 dark:bg-blue-500/20 dark:text-blue-300 dark:ring-blue-500/30"
+                :title="t('usage.dynamicRateTitle')"
+              >{{ t('usage.dynamicRate') }}</span>
+              <span
                 v-if="row.long_context_billing_applied"
                 data-testid="long-context-billing-marker"
                 :title="t('admin.usage.longContextPricingTooltip')"
@@ -500,7 +506,14 @@
           </div>
           <div class="flex items-center justify-between gap-6">
             <span class="text-gray-400">{{ t('usage.rate') }}</span>
-            <span class="font-semibold text-blue-400">{{ formatMultiplier(tooltipData?.rate_multiplier ?? 1) }}x</span>
+            <div class="flex items-center gap-1">
+              <span class="font-semibold text-blue-400">{{ formatMultiplier(tooltipData?.rate_multiplier ?? 1) }}x</span>
+              <span
+                v-if="tooltipData?.is_dynamic_rate"
+                class="inline-flex items-center rounded px-1 py-px text-[9px] font-semibold leading-tight bg-blue-500/20 text-blue-300 ring-1 ring-inset ring-blue-400/30"
+                :title="t('usage.dynamicRateTitle')"
+              >{{ t('usage.dynamicRate') }}</span>
+            </div>
           </div>
           <div class="flex items-center justify-between gap-6">
             <span class="text-gray-400">{{ t('usage.original') }}</span>
