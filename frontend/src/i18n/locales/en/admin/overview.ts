@@ -862,7 +862,8 @@ export default {
         descriptionLabel: 'Description',
         descriptionPlaceholder: 'Enter description (optional)',
         rateMultiplierLabel: 'Rate Multiplier',
-        rateMultiplierHint: '1.0 = standard rate, 0.5 = half price, 2.0 = double',
+        rateMultiplierHint: '1.0 = standard, 0.5 = half price; also supports dynamic expression (e.g. $up * 1.05, where $up is upstream rate)',
+        rateMultiplierPlaceholder: 'e.g. 1.0 or $up * 1.05',
         rpmLimit: 'Requests Per Minute (RPM)',
         rpmLimitPlaceholder: '0 = unlimited',
         rpmLimitHint: 'Max requests per minute for each user in this group; 0 = unlimited. Once set, it takes over per-user rate limiting in this group (overrides the user-level rpm_limit fallback).',
@@ -922,7 +923,7 @@ export default {
       groupCreatedSuccess: 'Group created successfully',
       groupUpdatedSuccess: 'Group updated successfully',
       groupDeletedSuccess: 'Group deleted successfully',
-      rateMultiplierHint: 'Cost multiplier for this group (e.g., 1.5 = 150% of base cost)',
+      rateMultiplierHint: '1.0 = standard, 0.5 = half price; also supports dynamic expression (e.g. $up * 1.05, where $up is upstream rate)',
       exclusiveHint: 'Exclusive group, manually assign to specific users',
       exclusiveTooltip: {
         title: 'What is an exclusive group?',

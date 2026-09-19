@@ -261,8 +261,15 @@
             </div>
           </template>
 
-          <template #cell-rate_multiplier="{ value }">
-            <span class="text-sm text-gray-700 dark:text-gray-300"
+          <template #cell-rate_multiplier="{ row, value }">
+            <span
+              v-if="row.rate_multiplier_expr"
+              class="inline-flex items-center rounded bg-blue-50 px-2 py-0.5 font-mono text-xs font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+              :title="`默认倍率: ${value}x`"
+            >
+              {{ row.rate_multiplier_expr }}
+            </span>
+            <span v-else class="text-sm text-gray-700 dark:text-gray-300"
               >{{ value }}x</span
             >
           </template>
@@ -616,13 +623,12 @@
             t("admin.groups.form.rateMultiplier")
           }}</label>
           <input
-            v-model.number="createForm.rate_multiplier"
-            type="number"
-            step="0.001"
-            min="0.001"
+            v-model="createForm.rate_multiplier_input"
+            type="text"
             required
-            class="input"
+            class="input font-mono"
             data-tour="group-form-multiplier"
+            :placeholder="t('admin.groups.modal.rateMultiplierPlaceholder')"
           />
           <p class="input-hint">{{ t("admin.groups.rateMultiplierHint") }}</p>
         </div>
@@ -2255,14 +2261,14 @@
             t("admin.groups.form.rateMultiplier")
           }}</label>
           <input
-            v-model.number="editForm.rate_multiplier"
-            type="number"
-            step="0.001"
-            min="0.001"
+            v-model="editForm.rate_multiplier_input"
+            type="text"
             required
-            class="input"
+            class="input font-mono"
             data-tour="group-form-multiplier"
+            :placeholder="t('admin.groups.modal.rateMultiplierPlaceholder')"
           />
+          <p class="input-hint">{{ t("admin.groups.rateMultiplierHint") }}</p>
         </div>
         <div>
           <label class="input-label">{{ t("admin.groups.form.rpmLimit") }}</label>
@@ -4928,11 +4934,28 @@ const submitEditAllowlistCustomEntry = () => {
   }
 };
 
+function parseRateMultiplierInput(input: string | number | null | undefined): {
+  rateMultiplier: number;
+  rateMultiplierExpr: string;
+} {
+  const trimmed = String(input ?? "").trim();
+  if (!trimmed) {
+    return { rateMultiplier: 1.0, rateMultiplierExpr: "" };
+  }
+  const num = Number(trimmed);
+  if (!isNaN(num) && Number.isFinite(num) && num > 0) {
+    return { rateMultiplier: num, rateMultiplierExpr: "" };
+  }
+  return { rateMultiplier: 1.0, rateMultiplierExpr: trimmed };
+}
+
 const createForm = reactive({
   name: "",
   description: "",
   platform: "anthropic" as GroupPlatform,
   rate_multiplier: 1.0,
+  rate_multiplier_expr: "",
+  rate_multiplier_input: "1.0",
   is_exclusive: false,
   subscription_type: "standard" as SubscriptionType,
   daily_limit_usd: null as number | null,
@@ -5297,6 +5320,8 @@ const editForm = reactive({
   description: "",
   platform: "anthropic" as GroupPlatform,
   rate_multiplier: 1.0,
+  rate_multiplier_expr: "",
+  rate_multiplier_input: "1.0",
   is_exclusive: false,
   status: "active" as "active" | "inactive",
   subscription_type: "standard" as SubscriptionType,
@@ -5760,6 +5785,8 @@ const closeCreateModal = () => {
   createForm.description = "";
   createForm.platform = "anthropic";
   createForm.rate_multiplier = 1.0;
+  createForm.rate_multiplier_expr = "";
+  createForm.rate_multiplier_input = "1.0";
   createForm.is_exclusive = false;
   createForm.subscription_type = "standard";
   createForm.daily_limit_usd = null;
@@ -5882,8 +5909,12 @@ const handleCreateGroup = async () => {
   }
   submitting.value = true;
   try {
+    const { rateMultiplier, rateMultiplierExpr } = parseRateMultiplierInput(
+      createForm.rate_multiplier_input,
+    );
     const {
       video_model_prices: _createFormVideoModelPrices,
+      rate_multiplier_input: _createFormRateMultiplierInput,
       ...createGroupForm
     } = createForm;
     const videoModelPrices = serializeVideoModelPrices(
@@ -5892,6 +5923,8 @@ const handleCreateGroup = async () => {
     // 构建请求数据，包含模型路由配置
     const requestData = {
       ...createGroupForm,
+      rate_multiplier: rateMultiplier,
+      rate_multiplier_expr: rateMultiplierExpr,
       force_openai_fast: normalizeGroupOpenAIFast(
         createForm.platform,
         createForm.force_openai_fast,
@@ -6029,6 +6062,9 @@ const handleEdit = async (group: AdminGroup) => {
   editForm.description = group.description || "";
   editForm.platform = group.platform;
   editForm.rate_multiplier = group.rate_multiplier;
+  editForm.rate_multiplier_expr = group.rate_multiplier_expr || "";
+  editForm.rate_multiplier_input =
+    group.rate_multiplier_expr || String(group.rate_multiplier);
   editForm.is_exclusive = group.is_exclusive;
   editForm.status = group.status;
   editForm.subscription_type = group.subscription_type || "standard";
@@ -6225,8 +6261,18 @@ const handleUpdateGroup = async () => {
   submitting.value = true;
   try {
     // 转换 fallback_group_id: null -> 0 (后端使用 0 表示清除)
+    const { rateMultiplier, rateMultiplierExpr } = parseRateMultiplierInput(
+      editForm.rate_multiplier_input,
+    );
+    const {
+      rate_multiplier_input: _editFormRateMultiplierInput,
+      ...cleanEditForm
+    } = editForm;
+    // 转换 fallback_group_id: null -> 0 (后端使用 0 表示清除)
     const payload = {
-      ...editForm,
+      ...cleanEditForm,
+      rate_multiplier: rateMultiplier,
+      rate_multiplier_expr: rateMultiplierExpr,
       force_openai_fast: normalizeGroupOpenAIFast(
         editForm.platform,
         editForm.force_openai_fast,

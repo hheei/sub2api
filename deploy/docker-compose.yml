@@ -16,7 +16,7 @@ services:
   # Sub2API Application
   # ===========================================================================
   sub2api:
-    image: weishaw/sub2api:latest
+    image: ghcr.io/hheei/sub2api:latest
     container_name: sub2api
     restart: unless-stopped
     security_opt:
@@ -310,6 +310,21 @@ services:
       start_period: 5s
     # 注意：不暴露端口到宿主机，应用通过内部网络连接
     # 如需调试，可临时添加：ports: ["127.0.0.1:6379:6379"]
+
+  # ===========================================================================
+  # Watchtower (Auto-Update Sub2API Container at 05:00 CST Daily)
+  # ===========================================================================
+  watchtower:
+    image: containrrr/watchtower
+    container_name: sub2api-watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - TZ=${TZ:-Asia/Shanghai}
+      - WATCHTOWER_SCHEDULE=0 0 5 * * *
+      - WATCHTOWER_CLEANUP=true
+    command: sub2api
 # =============================================================================
 # Volumes
 # =============================================================================
