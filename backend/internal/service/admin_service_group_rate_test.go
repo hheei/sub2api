@@ -29,11 +29,11 @@ type userGroupRateRepoStubForGroupRate struct {
 	rpmSyncErr       error
 }
 
-func (s *userGroupRateRepoStubForGroupRate) GetByUserID(_ context.Context, _ int64) (map[int64]float64, error) {
+func (s *userGroupRateRepoStubForGroupRate) GetByUserID(_ context.Context, _ int64) (map[int64]UserGroupRate, error) {
 	panic("unexpected GetByUserID call")
 }
 
-func (s *userGroupRateRepoStubForGroupRate) GetByUserAndGroup(_ context.Context, _, _ int64) (*float64, error) {
+func (s *userGroupRateRepoStubForGroupRate) GetByUserAndGroup(_ context.Context, _, _ int64) (*UserGroupRate, error) {
 	panic("unexpected GetByUserAndGroup call")
 }
 
@@ -48,7 +48,7 @@ func (s *userGroupRateRepoStubForGroupRate) GetByGroupID(_ context.Context, grou
 	return s.getByGroupIDData[groupID], nil
 }
 
-func (s *userGroupRateRepoStubForGroupRate) SyncUserGroupRates(_ context.Context, _ int64, _ map[int64]*float64) error {
+func (s *userGroupRateRepoStubForGroupRate) SyncUserGroupRates(_ context.Context, _ int64, _ map[int64]*UserGroupRate) error {
 	panic("unexpected SyncUserGroupRates call")
 }
 
@@ -194,6 +194,52 @@ func TestAdminService_BatchSetGroupRateMultipliers(t *testing.T) {
 		})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "sync failed")
+	})
+
+	t.Run("accepts expression and normalizes whitespace", func(t *testing.T) {
+		repo := &userGroupRateRepoStubForGroupRate{}
+		svc := &adminServiceImpl{userGroupRateRepo: repo}
+
+		err := svc.BatchSetGroupRateMultipliers(context.Background(), 10, []GroupRateMultiplierInput{
+			{UserID: 1, RateMultiplier: 1, RateMultiplierExpr: "  $up * 1.05  "},
+		})
+		require.NoError(t, err)
+		require.Equal(t, "$up * 1.05", repo.syncedEntries[0].RateMultiplierExpr)
+	})
+
+	t.Run("accepts zero multiplier as a valid override", func(t *testing.T) {
+		repo := &userGroupRateRepoStubForGroupRate{}
+		svc := &adminServiceImpl{userGroupRateRepo: repo}
+
+		err := svc.BatchSetGroupRateMultipliers(context.Background(), 10, []GroupRateMultiplierInput{
+			{UserID: 1, RateMultiplier: 0},
+		})
+		require.NoError(t, err)
+		require.Zero(t, repo.syncedEntries[0].RateMultiplier)
+	})
+
+	t.Run("rejects invalid expression as bad request", func(t *testing.T) {
+		repo := &userGroupRateRepoStubForGroupRate{}
+		svc := &adminServiceImpl{userGroupRateRepo: repo}
+
+		err := svc.BatchSetGroupRateMultipliers(context.Background(), 10, []GroupRateMultiplierInput{
+			{UserID: 1, RateMultiplier: 1, RateMultiplierExpr: "foo($up)"},
+		})
+		require.Error(t, err)
+		require.Equal(t, http.StatusBadRequest, infraerrors.Code(err))
+		require.Zero(t, repo.syncedGroupID)
+	})
+
+	t.Run("rejects negative multiplier as bad request", func(t *testing.T) {
+		repo := &userGroupRateRepoStubForGroupRate{}
+		svc := &adminServiceImpl{userGroupRateRepo: repo}
+
+		err := svc.BatchSetGroupRateMultipliers(context.Background(), 10, []GroupRateMultiplierInput{
+			{UserID: 1, RateMultiplier: -1},
+		})
+		require.Error(t, err)
+		require.Equal(t, http.StatusBadRequest, infraerrors.Code(err))
+		require.Zero(t, repo.syncedGroupID)
 	})
 }
 

@@ -44,6 +44,8 @@ type PlazaGroup struct {
 	Platform           string
 	SubscriptionType   string
 	RateMultiplier     float64
+	// IsDynamic 分组默认倍率是否来自动态表达式（RateMultiplier 此时仅为回退/展示值）。
+	IsDynamic          bool
 	PeakRateEnabled    bool
 	PeakStart          string
 	PeakEnd            string
@@ -130,6 +132,7 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 			Platform:                  g.Platform,
 			SubscriptionType:          g.SubscriptionType,
 			RateMultiplier:            g.RateMultiplier,
+			IsDynamic:                 strings.TrimSpace(g.RateMultiplierExpr) != "",
 			PeakRateEnabled:           g.PeakRateEnabled,
 			PeakStart:                 g.PeakStart,
 			PeakEnd:                   g.PeakEnd,

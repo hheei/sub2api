@@ -41,13 +41,28 @@ func TestEvalRateMultiplierExprRejectsUnsafeSyntax(t *testing.T) {
 	}
 }
 
-func TestResolveRateMultiplierExprRuntimeFailureUsesLegacyMultiplier(t *testing.T) {
-	group := &Group{ID: 42, RateMultiplierExpr: "$up / ($up - $up)"}
-	require.Equal(t, 0.7, resolveRateMultiplierExprOrLegacy(group, 0.7, 0.4, "test"))
+// 存量脏数据绕过保存期校验时，表达式求值失败必须回退到同一来源自己的静态值，
+// 绝不跨来源回退（用户覆盖存在时分组的表达式与静态值都不参与）。
+func TestResolveRateForUpstream_InvalidExpressionFallsBackWithinSameSource(t *testing.T) {
+	group := &Group{ID: 42, RateMultiplier: 1.1, RateMultiplierExpr: "$up / ($up - $up)"}
+
+	got, dynamic := resolveRateForUpstream(nil, group, 0.4, "test")
+	require.Equal(t, 1.1, got)
+	require.False(t, dynamic)
+
+	custom := &UserGroupRate{RateMultiplier: 0.7, RateMultiplierExpr: "$up / ($up - $up)"}
+	got, dynamic = resolveRateForUpstream(custom, group, 0.4, "test")
+	require.Equal(t, 0.7, got)
+	require.False(t, dynamic)
 }
 
-func TestResolveRateMultiplierExprPreservesLegacyBehavior(t *testing.T) {
-	got, err := ResolveRateMultiplierExpr(&Group{}, 0.7, 0.4)
-	require.NoError(t, err)
+func TestResolveStaticRate_EmptyExpressionUsesStaticValue(t *testing.T) {
+	group := &Group{RateMultiplier: 0.7}
+	got, dynamic := resolveStaticRate(nil, group)
 	require.Equal(t, 0.7, got)
+	require.False(t, dynamic)
+
+	got, dynamic = resolveStaticRate(&UserGroupRate{RateMultiplier: 0.3}, group)
+	require.Equal(t, 0.3, got)
+	require.False(t, dynamic)
 }

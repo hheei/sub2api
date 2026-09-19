@@ -83,6 +83,8 @@ type UsageLog struct {
 	LongContextBillingApplied bool `json:"long_context_billing_applied,omitempty"`
 	// AccountRateMultiplier holds the value of the "account_rate_multiplier" field.
 	AccountRateMultiplier *float64 `json:"account_rate_multiplier,omitempty"`
+	// Whether the effective rate multiplier came from a dynamic expression; NULL = unknown historical row
+	IsDynamicRate *bool `json:"is_dynamic_rate,omitempty"`
 	// BillingType holds the value of the "billing_type" field.
 	BillingType int8 `json:"billing_type,omitempty"`
 	// Stream holds the value of the "stream" field.
@@ -202,7 +204,7 @@ func (*UsageLog) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case usagelog.FieldImageSizeBreakdown:
 			values[i] = new([]byte)
-		case usagelog.FieldUpstreamModelMismatch, usagelog.FieldLongContextBillingApplied, usagelog.FieldStream, usagelog.FieldCacheTTLOverridden:
+		case usagelog.FieldUpstreamModelMismatch, usagelog.FieldLongContextBillingApplied, usagelog.FieldIsDynamicRate, usagelog.FieldStream, usagelog.FieldCacheTTLOverridden:
 			values[i] = new(sql.NullBool)
 		case usagelog.FieldInputCost, usagelog.FieldOutputCost, usagelog.FieldCacheCreationCost, usagelog.FieldCacheReadCost, usagelog.FieldTotalCost, usagelog.FieldActualCost, usagelog.FieldRateMultiplier, usagelog.FieldAccountRateMultiplier:
 			values[i] = new(sql.NullFloat64)
@@ -423,6 +425,13 @@ func (_m *UsageLog) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.AccountRateMultiplier = new(float64)
 				*_m.AccountRateMultiplier = value.Float64
+			}
+		case usagelog.FieldIsDynamicRate:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field is_dynamic_rate", values[i])
+			} else if value.Valid {
+				_m.IsDynamicRate = new(bool)
+				*_m.IsDynamicRate = value.Bool
 			}
 		case usagelog.FieldBillingType:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -708,6 +717,11 @@ func (_m *UsageLog) String() string {
 	builder.WriteString(", ")
 	if v := _m.AccountRateMultiplier; v != nil {
 		builder.WriteString("account_rate_multiplier=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.IsDynamicRate; v != nil {
+		builder.WriteString("is_dynamic_rate=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")

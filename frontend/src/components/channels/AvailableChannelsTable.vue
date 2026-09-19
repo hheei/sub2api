@@ -100,7 +100,8 @@
                     :platform="g.platform as GroupPlatform"
                     :subscription-type="(g.subscription_type || 'standard') as SubscriptionType"
                     :rate-multiplier="g.rate_multiplier"
-                    :user-rate-multiplier="userGroupRates[g.id] ?? null"
+                    :user-rate-multiplier="userGroupRates[g.id]?.rate_multiplier ?? null"
+                    :user-rate-is-dynamic="userGroupRates[g.id]?.is_dynamic === true"
                     :is-dynamic="g.is_dynamic"
                     always-show-rate
                   />
@@ -135,7 +136,8 @@
                     :platform="g.platform as GroupPlatform"
                     :subscription-type="(g.subscription_type || 'standard') as SubscriptionType"
                     :rate-multiplier="g.rate_multiplier"
-                    :user-rate-multiplier="userGroupRates[g.id] ?? null"
+                    :user-rate-multiplier="userGroupRates[g.id]?.rate_multiplier ?? null"
+                    :user-rate-is-dynamic="userGroupRates[g.id]?.is_dynamic === true"
                     always-show-rate
                     :is-dynamic="g.is_dynamic"
                   />
@@ -241,7 +243,8 @@
                         :platform="g.platform as GroupPlatform"
                         :subscription-type="(g.subscription_type || 'standard') as SubscriptionType"
                         :rate-multiplier="g.rate_multiplier"
-                        :user-rate-multiplier="userGroupRates[g.id] ?? null"
+                        :user-rate-multiplier="userGroupRates[g.id]?.rate_multiplier ?? null"
+                        :user-rate-is-dynamic="userGroupRates[g.id]?.is_dynamic === true"
                         always-show-rate
                         :is-dynamic="g.is_dynamic"
                       />
@@ -277,7 +280,8 @@
                         :platform="g.platform as GroupPlatform"
                         :subscription-type="(g.subscription_type || 'standard') as SubscriptionType"
                         :rate-multiplier="g.rate_multiplier"
-                        :user-rate-multiplier="userGroupRates[g.id] ?? null"
+                        :user-rate-multiplier="userGroupRates[g.id]?.rate_multiplier ?? null"
+                        :user-rate-is-dynamic="userGroupRates[g.id]?.is_dynamic === true"
                         :is-dynamic="g.is_dynamic"
                         always-show-rate
                       />
@@ -330,7 +334,7 @@ import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import GroupBadge from '@/components/common/GroupBadge.vue'
 import SupportedModelChip from './SupportedModelChip.vue'
 import type { UserAvailableChannel, UserAvailableGroup, UserChannelPlatformSection } from '@/api/channels'
-import type { GroupPlatform, SubscriptionType } from '@/types'
+import type { GroupPlatform, SubscriptionType, UserGroupRateDisplay } from '@/types'
 import { platformBadgeClass } from '@/utils/platformColors'
 import { useAppStore } from '@/stores/app'
 import { hasPeakRate as groupHasPeakRate, formatPeakRateWindow, serverTimezoneLabel } from '@/utils/peak-rate'
@@ -349,8 +353,8 @@ const props = defineProps<{
   noPricingLabel: string
   noModelsLabel: string
   emptyLabel: string
-  /** 用户专属倍率（group_id → multiplier）；无专属时由 GroupBadge 仅显示默认倍率。 */
-  userGroupRates: Record<number, number>
+  /** 用户专属倍率（group_id → {rate_multiplier, is_dynamic}）；无专属时由 GroupBadge 仅显示默认倍率。 */
+  userGroupRates: Record<number, UserGroupRateDisplay>
 }>()
 
 // Suppress unused warning — props is accessed via template automatically but
