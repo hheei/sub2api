@@ -17,6 +17,7 @@ func TestGroupEntityToService_PreservesMessagesDispatchModelConfig(t *testing.T)
 		Status:                service.StatusActive,
 		SubscriptionType:      service.SubscriptionTypeStandard,
 		RateMultiplier:        1,
+		RateMultiplierExpr:    "$up * 1.05",
 		AllowMessagesDispatch: true,
 		DefaultMappedModel:    "gpt-5.4",
 		VideoModelPrices: map[string]map[string]float64{
@@ -36,6 +37,7 @@ func TestGroupEntityToService_PreservesMessagesDispatchModelConfig(t *testing.T)
 	require.NotNil(t, got)
 	require.Equal(t, group.MessagesDispatchModelConfig, got.MessagesDispatchModelConfig)
 	require.Equal(t, group.VideoModelPrices, got.VideoModelPrices)
+	require.Equal(t, group.RateMultiplierExpr, got.RateMultiplierExpr)
 }
 
 func TestAPIKeyRepository_GetByKeyForAuth_PreservesMessagesDispatchModelConfig_SQLite(t *testing.T) {
@@ -49,6 +51,7 @@ func TestAPIKeyRepository_GetByKeyForAuth_PreservesMessagesDispatchModelConfig_S
 		SetStatus(service.StatusActive).
 		SetSubscriptionType(service.SubscriptionTypeStandard).
 		SetRateMultiplier(1).
+		SetRateMultiplierExpr("$up * 1.05").
 		SetAllowMessagesDispatch(true).
 		SetDefaultMappedModel("gpt-5.4").
 		SetMessagesDispatchModelConfig(service.OpenAIMessagesDispatchModelConfig{
@@ -76,4 +79,5 @@ func TestAPIKeyRepository_GetByKeyForAuth_PreservesMessagesDispatchModelConfig_S
 	require.Equal(t, key.Name, got.Name)
 	require.NotNil(t, got.Group)
 	require.Equal(t, group.MessagesDispatchModelConfig, got.Group.MessagesDispatchModelConfig)
+	require.Equal(t, "$up * 1.05", got.Group.RateMultiplierExpr)
 }

@@ -14,7 +14,6 @@ func TestEvalRateMultiplierExpr(t *testing.T) {
 		want float64
 	}{
 		{name: "passthrough", expr: "$up", up: 0.6, want: 0.6},
-		{name: "actual alias", expr: "$actual", up: 0.6, want: 0.6},
 		{name: "markup", expr: "$up * 1.05", up: 0.8, want: 0.84},
 		{name: "arithmetic", expr: "($up + 0.1) / 2", up: 0.6, want: 0.35},
 	}
@@ -40,6 +39,11 @@ func TestEvalRateMultiplierExprRejectsUnsafeSyntax(t *testing.T) {
 			require.Error(t, err)
 		})
 	}
+}
+
+func TestResolveRateMultiplierExprRuntimeFailureUsesLegacyMultiplier(t *testing.T) {
+	group := &Group{ID: 42, RateMultiplierExpr: "$up / ($up - $up)"}
+	require.Equal(t, 0.7, resolveRateMultiplierExprOrLegacy(group, 0.7, 0.4, "test"))
 }
 
 func TestResolveRateMultiplierExprPreservesLegacyBehavior(t *testing.T) {

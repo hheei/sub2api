@@ -85,6 +85,11 @@ func RateMultiplier(v float64) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldRateMultiplier, v))
 }
 
+// RateMultiplierExpr applies equality check predicate on the "rate_multiplier_expr" field. It's identical to RateMultiplierExprEQ.
+func RateMultiplierExpr(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldRateMultiplierExpr, v))
+}
+
 // PeakRateEnabled applies equality check predicate on the "peak_rate_enabled" field. It's identical to PeakRateEnabledEQ.
 func PeakRateEnabled(v bool) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldPeakRateEnabled, v))
@@ -653,6 +658,71 @@ func RateMultiplierLT(v float64) predicate.Group {
 // RateMultiplierLTE applies the LTE predicate on the "rate_multiplier" field.
 func RateMultiplierLTE(v float64) predicate.Group {
 	return predicate.Group(sql.FieldLTE(FieldRateMultiplier, v))
+}
+
+// RateMultiplierExprEQ applies the EQ predicate on the "rate_multiplier_expr" field.
+func RateMultiplierExprEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldRateMultiplierExpr, v))
+}
+
+// RateMultiplierExprNEQ applies the NEQ predicate on the "rate_multiplier_expr" field.
+func RateMultiplierExprNEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldRateMultiplierExpr, v))
+}
+
+// RateMultiplierExprIn applies the In predicate on the "rate_multiplier_expr" field.
+func RateMultiplierExprIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldRateMultiplierExpr, vs...))
+}
+
+// RateMultiplierExprNotIn applies the NotIn predicate on the "rate_multiplier_expr" field.
+func RateMultiplierExprNotIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldRateMultiplierExpr, vs...))
+}
+
+// RateMultiplierExprGT applies the GT predicate on the "rate_multiplier_expr" field.
+func RateMultiplierExprGT(v string) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldRateMultiplierExpr, v))
+}
+
+// RateMultiplierExprGTE applies the GTE predicate on the "rate_multiplier_expr" field.
+func RateMultiplierExprGTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldRateMultiplierExpr, v))
+}
+
+// RateMultiplierExprLT applies the LT predicate on the "rate_multiplier_expr" field.
+func RateMultiplierExprLT(v string) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldRateMultiplierExpr, v))
+}
+
+// RateMultiplierExprLTE applies the LTE predicate on the "rate_multiplier_expr" field.
+func RateMultiplierExprLTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldRateMultiplierExpr, v))
+}
+
+// RateMultiplierExprContains applies the Contains predicate on the "rate_multiplier_expr" field.
+func RateMultiplierExprContains(v string) predicate.Group {
+	return predicate.Group(sql.FieldContains(FieldRateMultiplierExpr, v))
+}
+
+// RateMultiplierExprHasPrefix applies the HasPrefix predicate on the "rate_multiplier_expr" field.
+func RateMultiplierExprHasPrefix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasPrefix(FieldRateMultiplierExpr, v))
+}
+
+// RateMultiplierExprHasSuffix applies the HasSuffix predicate on the "rate_multiplier_expr" field.
+func RateMultiplierExprHasSuffix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasSuffix(FieldRateMultiplierExpr, v))
+}
+
+// RateMultiplierExprEqualFold applies the EqualFold predicate on the "rate_multiplier_expr" field.
+func RateMultiplierExprEqualFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldEqualFold(FieldRateMultiplierExpr, v))
+}
+
+// RateMultiplierExprContainsFold applies the ContainsFold predicate on the "rate_multiplier_expr" field.
+func RateMultiplierExprContainsFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldContainsFold(FieldRateMultiplierExpr, v))
 }
 
 // PeakRateEnabledEQ applies the EQ predicate on the "peak_rate_enabled" field.
