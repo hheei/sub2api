@@ -101,6 +101,7 @@ func TestUsageLogRepositoryCreateSyncRequestTypeAndLegacyFields(t *testing.T) {
 			sqlmock.AnyArg(), // account_stats_cost
 			sqlmock.AnyArg(), // upstream_request_id
 			sqlmock.AnyArg(), // session_id
+			nil,              // is_dynamic_rate (unknown)
 			log.NativeCompactionV2,
 			log.CacheCreation30mTokens,
 			log.CacheCreation12hTokens,
@@ -198,6 +199,7 @@ func TestUsageLogRepositoryCreate_PersistsServiceTier(t *testing.T) {
 			sqlmock.AnyArg(), // account_stats_cost
 			sqlmock.AnyArg(), // upstream_request_id
 			sqlmock.AnyArg(), // session_id
+			nil,              // is_dynamic_rate (unknown)
 			log.NativeCompactionV2,
 			log.CacheCreation30mTokens,
 			log.CacheCreation12hTokens,
@@ -962,13 +964,15 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{},
 			sql.NullFloat64{},
 			sql.NullString{}, // upstream_request_id
-			sql.NullString{},
-			false, // native_compaction_v2
-			0,     // cache_creation_30m_tokens
-			0,     // cache_creation_12h_tokens
+			sql.NullString{}, // session_id
+			sql.NullBool{},   // is_dynamic_rate
+			false,            // native_compaction_v2
+			0,                // cache_creation_30m_tokens
+			0,                // cache_creation_12h_tokens
 			now,
 		}})
 		require.NoError(t, err)
+		require.Nil(t, log.IsDynamicRate, "NULL is_dynamic_rate must stay unknown")
 		require.Equal(t, 2, log.ImageCount)
 		require.NotNil(t, log.ImageSize)
 		require.Equal(t, "4K", *log.ImageSize)
@@ -1045,12 +1049,14 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullFloat64{}, // account_stats_cost
 			sql.NullString{},  // upstream_request_id
 			sql.NullString{},  // session_id
+			sql.NullBool{},    // is_dynamic_rate
 			false,             // native_compaction_v2
 			0,                 // cache_creation_30m_tokens
 			0,                 // cache_creation_12h_tokens
 			now,
 		}})
 		require.NoError(t, err)
+		require.Nil(t, log.IsDynamicRate, "NULL is_dynamic_rate must stay unknown")
 		require.NotNil(t, log.ServiceTier)
 		require.Equal(t, "priority", *log.ServiceTier)
 		require.Equal(t, service.RequestTypeWSV2, log.RequestType)
@@ -1103,19 +1109,22 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{},
 			false,
 			false,
-			sql.NullInt64{},   // channel_id
-			sql.NullString{},  // model_mapping_chain
-			sql.NullString{},  // billing_tier
-			sql.NullString{},  // billing_mode
-			sql.NullFloat64{}, // account_stats_cost
-			sql.NullString{},  // upstream_request_id
-			sql.NullString{},  // session_id
-			true,              // native_compaction_v2
-			0,                 // cache_creation_30m_tokens
-			0,                 // cache_creation_12h_tokens
+			sql.NullInt64{},                        // channel_id
+			sql.NullString{},                       // model_mapping_chain
+			sql.NullString{},                       // billing_tier
+			sql.NullString{},                       // billing_mode
+			sql.NullFloat64{},                      // account_stats_cost
+			sql.NullString{},                       // upstream_request_id
+			sql.NullString{},                       // session_id
+			sql.NullBool{Valid: true, Bool: false}, // is_dynamic_rate
+			true,                                   // native_compaction_v2
+			0,                                      // cache_creation_30m_tokens
+			0,                                      // cache_creation_12h_tokens
 			now,
 		}})
 		require.NoError(t, err)
+		require.NotNil(t, log.IsDynamicRate, "stored false must not be conflated with unknown")
+		require.False(t, *log.IsDynamicRate)
 		require.NotNil(t, log.ServiceTier)
 		require.Equal(t, "flex", *log.ServiceTier)
 		require.Equal(t, service.RequestTypeStream, log.RequestType)
@@ -1169,19 +1178,22 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{},
 			false,
 			false,
-			sql.NullInt64{},   // channel_id
-			sql.NullString{},  // model_mapping_chain
-			sql.NullString{},  // billing_tier
-			sql.NullString{},  // billing_mode
-			sql.NullFloat64{}, // account_stats_cost
-			sql.NullString{},  // upstream_request_id
-			sql.NullString{},  // session_id
-			false,             // native_compaction_v2
-			0,                 // cache_creation_30m_tokens
-			0,                 // cache_creation_12h_tokens
+			sql.NullInt64{},                       // channel_id
+			sql.NullString{},                      // model_mapping_chain
+			sql.NullString{},                      // billing_tier
+			sql.NullString{},                      // billing_mode
+			sql.NullFloat64{},                     // account_stats_cost
+			sql.NullString{},                      // upstream_request_id
+			sql.NullString{},                      // session_id
+			sql.NullBool{Valid: true, Bool: true}, // is_dynamic_rate
+			false,                                 // native_compaction_v2
+			0,                                     // cache_creation_30m_tokens
+			0,                                     // cache_creation_12h_tokens
 			now,
 		}})
 		require.NoError(t, err)
+		require.NotNil(t, log.IsDynamicRate)
+		require.True(t, *log.IsDynamicRate)
 		require.NotNil(t, log.ServiceTier)
 		require.Equal(t, "priority", *log.ServiceTier)
 	})
