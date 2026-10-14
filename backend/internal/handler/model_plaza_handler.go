@@ -191,7 +191,7 @@ func filterPlazaVisibleGroups(
 }
 
 // toLocalizedModelPlazaGroups 转换可见分组，并把名称与描述换成请求首选语言的版本。
-func toLocalizedModelPlazaGroups(visible []service.PlazaGroup, userRates map[int64]float64, acceptLanguage string) []modelPlazaGroup {
+func toLocalizedModelPlazaGroups(visible []service.PlazaGroup, userRates map[int64]service.UserGroupRateDisplay, acceptLanguage string) []modelPlazaGroup {
 	out := make([]modelPlazaGroup, 0, len(visible))
 	for i := range visible {
 		group := toModelPlazaGroupDTO(&visible[i], userRates)
