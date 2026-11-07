@@ -2269,6 +2269,24 @@
         />
       </div>
 
+      <div
+        v-if="account?.type === 'apikey' && upstreamBillingGroupOptions.length > 1"
+        class="flex items-center justify-between gap-4 border-t border-gray-200 pt-4 dark:border-dark-600"
+      >
+        <div>
+          <label class="input-label mb-0">{{ t('admin.accounts.upstreamBilling.group') }}</label>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            {{ t('admin.accounts.upstreamBilling.groupHint') }}
+          </p>
+        </div>
+        <Select
+          v-model="upstreamBillingGroup"
+          :options="upstreamBillingGroupOptions"
+          data-testid="upstream-billing-group"
+          :aria-label="t('admin.accounts.upstreamBilling.group')"
+        />
+      </div>
+
       <OllamaCloudUsageSettings
         v-if="account?.ollama_cloud_usage?.eligible"
         :account="account"
@@ -4097,6 +4115,32 @@ const autoResetCredit5hThreshold = ref(100)
 const autoResetCredit7dThreshold = ref(100)
 const upstreamBillingAutoProbeEnabled = ref(false)
 const upstreamBillingRateSyncEnabled = ref(false)
+// 上游分组：new-api 系的 /api/pricing 不会说这把 Key 属于哪个分组，只能让
+// 管理员从中介列出的分组里选一个，探测按它取倍率。
+const upstreamBillingGroup = ref('')
+const upstreamBillingGroups = ref<Array<{ name: string; ratio: number }>>([])
+const upstreamBillingGroupOptions = computed(() => {
+  const options = [{ value: '', label: t('admin.accounts.upstreamBilling.groupNone') }]
+  for (const group of upstreamBillingGroups.value) {
+    options.push({ value: group.name, label: `${group.name} · ${group.ratio}` })
+  }
+  // 已配置但上游不再列出的分组也留在选项里，否则看不见也改不掉它。
+  if (upstreamBillingGroup.value && !upstreamBillingGroups.value.some((group) => group.name === upstreamBillingGroup.value)) {
+    options.push({ value: upstreamBillingGroup.value, label: upstreamBillingGroup.value })
+  }
+  return options
+})
+const loadUpstreamBillingGroups = async (account: Account | null | undefined) => {
+  upstreamBillingGroups.value = []
+  if (!account || account.type !== 'apikey' || typeof adminAPI.accounts.getUpstreamBillingGroups !== 'function') return
+  try {
+    upstreamBillingGroups.value = (await adminAPI.accounts.getUpstreamBillingGroups(account.id)) ?? []
+  } catch {
+    // 上游没有 new-api 定价页：不给选项，已配置的分组仍显示为当前值。
+    upstreamBillingGroups.value = []
+  }
+}
+watch(() => props.account, (account) => void loadUpstreamBillingGroups(account), { immediate: true })
 const mixedScheduling = ref(false) // For antigravity accounts: enable mixed scheduling
 // 上游ID：直接上游声明请求标识的响应头名，留空不记录。
 const upstreamRequestIdHeader = ref('')
@@ -4659,6 +4703,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
 	upstreamBillingAutoProbeEnabled.value = extra?.upstream_billing_probe_enabled === true
   upstreamBillingRateSyncEnabled.value =
     upstreamBillingAutoProbeEnabled.value && extra?.upstream_billing_rate_sync_enabled === true
+  upstreamBillingGroup.value = typeof extra?.upstream_billing_group === 'string' ? extra.upstream_billing_group : ''
 
   // Load OpenAI passthrough toggle (OpenAI OAuth/SetupToken/API Key)
   openaiPassthroughEnabled.value = false
@@ -5675,6 +5720,7 @@ const handleSubmit = async () => {
     if (props.account.type === 'apikey') {
       updatePayload.upstream_billing_probe_enabled = upstreamBillingAutoProbeEnabled.value
       updatePayload.upstream_billing_rate_sync_enabled = upstreamBillingRateSyncEnabled.value
+      updatePayload.upstream_billing_group = upstreamBillingGroup.value
       if (upstreamBillingRateSyncEnabled.value) {
         delete updatePayload.rate_multiplier
       }

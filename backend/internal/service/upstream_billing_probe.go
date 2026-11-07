@@ -692,16 +692,39 @@ func (s *UpstreamBillingProbeService) probeLoadedAccount(ctx context.Context, ac
 	if len(body) > upstreamBillingProbeMaxBodyBytes {
 		return s.persistProbeFailure(ctx, account, intervalMinutes, now, resp.StatusCode, "response_too_large", retryAfter(resp.Header, now))
 	}
-	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusMethodNotAllowed {
-		return s.persistProbeFailure(ctx, account, intervalMinutes, now, resp.StatusCode, "unsupported", retryAfter(resp.Header, now))
+	statusCode := resp.StatusCode
+	retryAfterDuration := retryAfter(resp.Header, now)
+	// 没有 /v1/sub2api/billing 的中转（new-api / one-api 系）走回退探测：
+	// 它们只在公开的 /api/pricing 上声明分组倍率。
+	if statusCode == http.StatusNotFound || statusCode == http.StatusMethodNotAllowed {
+		if snapshot, found, err := s.probeNewAPIFallback(ctx, account, intervalMinutes, now, normalizedBaseURL, apiKey, proxyURL); found || err != nil {
+			return snapshot, err
+		}
+		return s.persistProbeFailure(ctx, account, intervalMinutes, now, statusCode, "unsupported", retryAfterDuration)
 	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return s.persistProbeFailure(ctx, account, intervalMinutes, now, resp.StatusCode, "http_error", retryAfter(resp.Header, now))
+	if statusCode < 200 || statusCode >= 300 {
+		return s.persistProbeFailure(ctx, account, intervalMinutes, now, statusCode, "http_error", retryAfterDuration)
 	}
 	data, err := parseUpstreamBillingProbeResponse(body)
 	if err != nil {
-		return s.persistProbeFailure(ctx, account, intervalMinutes, now, resp.StatusCode, "invalid_response", retryAfter(resp.Header, now))
+		// 200 也能是别家的 SPA 页或别的 schema：同样给 new-api 一次机会。
+		if snapshot, found, fallbackErr := s.probeNewAPIFallback(ctx, account, intervalMinutes, now, normalizedBaseURL, apiKey, proxyURL); found || fallbackErr != nil {
+			return snapshot, fallbackErr
+		}
+		return s.persistProbeFailure(ctx, account, intervalMinutes, now, statusCode, "invalid_response", retryAfterDuration)
 	}
+	return s.recordProbeData(ctx, account, intervalMinutes, now, statusCode, data)
+}
+
+// recordProbeData 把一次成功的探测落进快照，并在账号开启同步时写回倍率。
+func (s *UpstreamBillingProbeService) recordProbeData(
+	ctx context.Context,
+	account *Account,
+	intervalMinutes int,
+	now time.Time,
+	statusCode int,
+	data map[string]any,
+) (*UpstreamBillingProbeSnapshot, error) {
 	snapshot := &UpstreamBillingProbeSnapshot{
 		Status:        UpstreamBillingProbeStatusOK,
 		Data:          data,
@@ -709,7 +732,7 @@ func (s *UpstreamBillingProbeService) probeLoadedAccount(ctx context.Context, ac
 		FreshUntil:    probeTimePtr(now.Add(2 * time.Duration(intervalMinutes) * time.Minute)),
 		LastAttemptAt: now,
 		NextProbeAt:   now.Add(nextProbeDelay(intervalMinutes, 0)),
-		HTTPStatus:    resp.StatusCode,
+		HTTPStatus:    statusCode,
 	}
 	// 账号级值域与精度只在真要写回时才有影响：只观察上游声明、未开启同步的
 	// 账号不因声明值不适配 accounts.rate_multiplier 而被记成探测失败并进入
