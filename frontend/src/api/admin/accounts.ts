@@ -1050,6 +1050,22 @@ export async function probeUpstreamBilling(id: number): Promise<UpstreamBillingP
   return data
 }
 
+export interface UpstreamBillingGroup {
+  name: string
+  ratio: number
+}
+
+/**
+ * Read the groups the account's new-api upstream declares.
+ * Fails when the upstream publishes no new-api pricing page.
+ */
+export async function getUpstreamBillingGroups(id: number): Promise<UpstreamBillingGroup[]> {
+  const { data } = await apiClient.get<{ groups: UpstreamBillingGroup[] }>(
+    `/admin/accounts/${id}/upstream-billing-groups`
+  )
+  return data.groups ?? []
+}
+
 export async function probeUpstreamBillingBatch(accountIds: number[]): Promise<UpstreamBillingProbeResult[]> {
   const { data } = await apiClient.post<{ results: UpstreamBillingProbeResult[] }>(
     '/admin/accounts/upstream-billing-probe/batch',
@@ -1191,6 +1207,7 @@ export const accountsAPI = {
   setUpstreamBillingProbeEnabled,
   probeUpstreamBilling,
   probeUpstreamBillingBatch,
+  getUpstreamBillingGroups,
   getOllamaCloudUsageSettings,
   updateOllamaCloudUsageSettings,
   getOllamaCloudUsage,
