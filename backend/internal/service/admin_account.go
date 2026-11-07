@@ -766,6 +766,24 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	if requestedRateSyncEnabledUpdate != nil {
 		account.Extra[UpstreamBillingRateSyncEnabledExtraKey] = *requestedRateSyncEnabledUpdate
 	}
+	// 上游分组是人工填的一项配置：new-api 的 /api/pricing 不会说这把 Key
+	// 属于哪个分组，探测只能按这里写的名字取倍率。空串表示清掉。
+	if input.BillingGroup != nil {
+		group := strings.TrimSpace(*input.BillingGroup)
+		if len([]rune(group)) > upstreamBillingNewAPIGroupMaxLen || strings.ContainsAny(group, "\r\n") {
+			return nil, ErrUpstreamBillingNewAPIGroupInvalid
+		}
+		if group == "" {
+			if account.Extra != nil {
+				delete(account.Extra, UpstreamBillingNewAPIGroupExtraKey)
+			}
+		} else {
+			if account.Extra == nil {
+				account.Extra = make(map[string]any)
+			}
+			account.Extra[UpstreamBillingNewAPIGroupExtraKey] = group
+		}
+	}
 	// 影子代理恒继承母账号(由 propagateProxyToShadows 同步),不接受独立编辑——外审 B/P1;
 	// 否则要等母账号下次改 proxy 才被覆盖,期间影子会出现"有时继承、有时独立"的漂移。
 	if input.ProxyID != nil && !account.IsCredentialShadow() {

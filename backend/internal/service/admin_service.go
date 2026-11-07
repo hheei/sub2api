@@ -454,6 +454,7 @@ type UpdateAccountInput struct {
 	AutoPauseOnExpired    *bool
 	ProbeEnabled          *bool
 	RateSyncEnabled       *bool
+	BillingGroup          *string
 	SkipMixedChannelCheck bool // 跳过混合渠道检查（用户已确认风险）
 }
 

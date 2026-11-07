@@ -1,15 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent } from 'vue'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import {
   BUILTIN_PLATFORM_CATALOG,
   resetPlatformCatalog,
   setPlatformCatalog
 } from '@/constants/platformCatalog'
 
-const { updateAccountMock, checkMixedChannelRiskMock, authIsSimpleMode } = vi.hoisted(() => ({
+const { updateAccountMock, checkMixedChannelRiskMock, getUpstreamBillingGroupsMock, authIsSimpleMode } = vi.hoisted(() => ({
   updateAccountMock: vi.fn(),
   checkMixedChannelRiskMock: vi.fn(),
+  getUpstreamBillingGroupsMock: vi.fn(),
   authIsSimpleMode: { value: true }
 }))
 
@@ -33,7 +34,8 @@ vi.mock('@/api/admin', () => ({
   adminAPI: {
     accounts: {
       update: updateAccountMock,
-      checkMixedChannelRisk: checkMixedChannelRiskMock
+      checkMixedChannelRisk: checkMixedChannelRiskMock,
+      getUpstreamBillingGroups: getUpstreamBillingGroupsMock
     },
     settings: {
       getWebSearchEmulationConfig: vi.fn().mockResolvedValue({ enabled: false, providers: [] }),
@@ -332,6 +334,7 @@ function mountModal(account = buildAccount(), renderGroupSelector = false) {
 describe('EditAccountModal', () => {
   beforeEach(() => {
     authIsSimpleMode.value = true
+    getUpstreamBillingGroupsMock.mockReset().mockResolvedValue([])
   })
 
   afterEach(() => vi.useRealTimers())
@@ -1328,6 +1331,27 @@ describe('EditAccountModal', () => {
     expect(payload?.upstream_billing_probe_enabled).toBe(true)
     expect(payload?.upstream_billing_rate_sync_enabled).toBe(true)
     expect(payload).not.toHaveProperty('rate_multiplier')
+  })
+
+  it('carries the upstream group chosen from the upstream pricing page', async () => {
+    const account = buildAccount()
+    account.extra = {
+      upstream_billing_probe_enabled: true,
+      upstream_billing_group: 'Kiro正价'
+    }
+    updateAccountMock.mockReset().mockResolvedValue(account)
+    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
+    getUpstreamBillingGroupsMock.mockResolvedValueOnce([
+      { name: 'Codex-pro', ratio: 0.14 },
+      { name: 'Kiro正价', ratio: 0.33 }
+    ])
+
+    const wrapper = mountModal(account)
+    await flushPromises()
+    expect(wrapper.get('[data-testid="upstream-billing-group"]').text()).toContain('Kiro正价')
+
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    expect(updateAccountMock.mock.calls[0]?.[1]?.upstream_billing_group).toBe('Kiro正价')
   })
 
   it('disabling probing also disables rate sync and restores manual rate editing', async () => {

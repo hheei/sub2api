@@ -91,6 +91,27 @@ func (h *AccountHandler) ProbeUpstreamBilling(c *gin.Context) {
 	response.Success(c, service.UpstreamBillingProbeResult{AccountID: accountID, Snapshot: snapshot})
 }
 
+// GetUpstreamBillingGroups lists the groups the account's new-api upstream
+// declares, so the admin picks a group instead of typing its name.
+// GET /api/v1/admin/accounts/:id/upstream-billing-groups
+func (h *AccountHandler) GetUpstreamBillingGroups(c *gin.Context) {
+	if h.upstreamBillingProbe == nil {
+		response.ErrorFrom(c, service.ErrUpstreamBillingProbeUnavailable)
+		return
+	}
+	accountID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || accountID <= 0 {
+		response.BadRequest(c, "Invalid account ID")
+		return
+	}
+	groups, err := h.upstreamBillingProbe.ListNewAPIGroups(c.Request.Context(), accountID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{"groups": groups})
+}
+
 func (h *AccountHandler) ProbeUpstreamBillingBatch(c *gin.Context) {
 	if h.upstreamBillingProbe == nil {
 		response.ErrorFrom(c, service.ErrUpstreamBillingProbeUnavailable)
