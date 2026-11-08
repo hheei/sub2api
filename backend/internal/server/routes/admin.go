@@ -575,6 +575,10 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpA
 	registerScopedAdminKeyRoutes(adminSettings, h, stepUpAuth)
 	{
 		adminSettings.GET("", h.Admin.Setting.GetSettings)
+		// 全局数据脱敏（masking_config）
+		adminSettings.GET("/masking/config", h.Admin.Setting.GetMaskingConfig)
+		adminSettings.PUT("/masking/config", h.Admin.Setting.UpdateMaskingConfig)
+		adminSettings.POST("/masking/preview", h.Admin.Setting.PreviewMasking)
 		adminSettings.PUT("", h.Admin.Setting.UpdateSettings)
 		adminSettings.POST("/test-smtp", h.Admin.Setting.TestSMTPConnection)
 		adminSettings.POST("/send-test-email", h.Admin.Setting.SendTestEmail)

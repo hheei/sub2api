@@ -7875,6 +7875,118 @@
           </div>
         </div>
 
+
+          <!-- 全局数据脱敏 -->
+          <div class="card">
+            <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                {{ t('admin.settings.features.masking.title') }}
+              </h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {{ t('admin.settings.features.masking.description') }}
+              </p>
+            </div>
+            <div class="space-y-5 p-6">
+              <div class="flex items-center justify-between">
+                <div>
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {{ t('admin.settings.features.masking.enabled') }}
+                  </label>
+                  <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.settings.features.masking.enabledHint') }}
+                  </p>
+                </div>
+                <Toggle v-model="maskingForm.enabled" />
+              </div>
+
+              <div v-if="maskingForm.enabled" class="space-y-5">
+                <div>
+                  <label class="input-label">{{ t('admin.settings.features.masking.mode') }}</label>
+                  <select v-model="maskingForm.mode" class="input mt-1.5 w-full max-w-md">
+                    <option value="rules">{{ t('admin.settings.features.masking.modeRules') }}</option>
+                    <option value="rules+tagger">{{ t('admin.settings.features.masking.modeTagger') }}</option>
+                  </select>
+                  <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.settings.features.masking.modeHint') }}
+                  </p>
+                </div>
+
+                <div v-if="maskingForm.mode === 'rules+tagger'" class="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label class="input-label">{{ t('admin.settings.features.masking.guardBaseUrl') }}</label>
+                    <input v-model.trim="maskingForm.taggerBaseUrl" class="input mt-1.5 w-full" placeholder="http://127.0.0.1:8000" />
+                  </div>
+                  <div>
+                    <label class="input-label">{{ t('admin.settings.features.masking.guardModel') }}</label>
+                    <input v-model.trim="maskingForm.taggerModel" class="input mt-1.5 w-full" placeholder="qwen3guard" />
+                  </div>
+                  <div>
+                    <label class="input-label">{{ t('admin.settings.features.masking.guardTimeout') }}</label>
+                    <input v-model.number="maskingForm.taggerTimeoutMs" type="number" min="100" max="10000" class="input mt-1.5 w-full" />
+                  </div>
+                  <div>
+                    <label class="input-label">{{ t('admin.settings.features.masking.guardMaxLeaves') }}</label>
+                    <input v-model.number="maskingForm.taggerMaxLeaves" type="number" min="1" max="32" class="input mt-1.5 w-full" />
+                  </div>
+                </div>
+
+                <div class="flex items-center justify-between">
+                  <div>
+                    <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {{ t('admin.settings.features.masking.notice') }}
+                    </label>
+                    <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                      {{ t('admin.settings.features.masking.noticeHint') }}
+                    </p>
+                  </div>
+                  <Toggle v-model="maskingForm.noticeEnabled" />
+                </div>
+
+                <div v-if="maskingForm.noticeEnabled">
+                  <label class="input-label">{{ t('admin.settings.features.masking.noticeText') }}</label>
+                  <textarea
+                    v-model="maskingForm.noticeText"
+                    rows="3"
+                    class="input mt-1.5 w-full"
+                    :placeholder="maskingDefaults.notice"
+                  ></textarea>
+                  <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.settings.features.masking.noticeTextHint') }}
+                  </p>
+                </div>
+
+                <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-600">
+                  <div class="flex items-center justify-between gap-3">
+                    <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {{ t('admin.settings.features.masking.preview') }}
+                    </label>
+                    <button type="button" class="btn btn-secondary btn-sm" :disabled="maskingPreview.running" @click="runMaskingPreview">
+                      {{ maskingPreview.running ? t('common.loading') : t('admin.settings.features.masking.previewRun') }}
+                    </button>
+                  </div>
+                  <textarea
+                    v-model="maskingPreview.input"
+                    rows="2"
+                    class="input mt-2 w-full"
+                    :placeholder="t('admin.settings.features.masking.previewPlaceholder')"
+                  ></textarea>
+                  <div v-if="maskingPreview.output" class="mt-3 space-y-1">
+                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                      {{ t('admin.settings.features.masking.previewHits', { hits: maskingPreview.hits, kinds: maskingPreview.kinds.join(', ') || '—' }) }}
+                    </p>
+                    <pre class="max-h-40 overflow-auto rounded bg-gray-50 p-3 text-xs text-gray-800 dark:bg-dark-900 dark:text-dark-200">{{ maskingPreview.output }}</pre>
+                  </div>
+                </div>
+
+                <div class="flex justify-end">
+                  <button type="button" class="btn btn-primary" :disabled="maskingSaving" @click="saveMaskingConfig">
+                    {{ maskingSaving ? t('common.saving') : t('common.save') }}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
         </div><!-- /Tab: Features -->
 
         <!-- Tab: Email -->
@@ -9132,6 +9244,85 @@ function handleSettingsTabKeydown(event: KeyboardEvent, tab: SettingsTab): void 
 const { copyToClipboard } = useClipboard();
 
 const loading = ref(true);
+
+const maskingDefaults = reactive({ notice: "" });
+const maskingSaving = ref(false);
+const maskingForm = reactive({
+  enabled: false,
+  mode: "rules" as "rules" | "rules+tagger",
+  noticeEnabled: true,
+  noticeText: "",
+  taggerBaseUrl: "",
+  taggerModel: "",
+  taggerTimeoutMs: 1500,
+  taggerMaxLeaves: 8,
+});
+const maskingPreview = reactive({ input: "", output: "", hits: 0, kinds: [] as string[], running: false });
+
+function applyMaskingView(view: { config: any; default_notice: string }) {
+  const cfg = view.config || {};
+  maskingDefaults.notice = view.default_notice || "";
+  maskingForm.enabled = Boolean(cfg.enabled);
+  maskingForm.mode = cfg.mode === "rules+tagger" ? "rules+tagger" : "rules";
+  maskingForm.noticeEnabled = cfg.notice?.enabled === false ? false : true;
+  maskingForm.noticeText = cfg.notice?.text || "";
+  maskingForm.taggerBaseUrl = cfg.tagger?.base_url || "";
+  maskingForm.taggerModel = cfg.tagger?.model || "";
+  maskingForm.taggerTimeoutMs = Number(cfg.tagger?.timeout_ms) || 1500;
+  maskingForm.taggerMaxLeaves = Number(cfg.tagger?.max_leaves) || 8;
+}
+
+function buildMaskingConfig() {
+  return {
+    enabled: maskingForm.enabled,
+    mode: maskingForm.mode,
+    actions: {},
+    allow: [],
+    max_body_bytes: 2097152,
+    tagger: {
+      base_url: maskingForm.taggerBaseUrl,
+      model: maskingForm.taggerModel,
+      timeout_ms: maskingForm.taggerTimeoutMs,
+      max_leaves: maskingForm.taggerMaxLeaves,
+    },
+    notice: { enabled: maskingForm.noticeEnabled, text: maskingForm.noticeText },
+  };
+}
+
+async function loadMaskingConfig() {
+  try {
+    applyMaskingView(await adminAPI.masking.getConfig());
+  } catch (error) {
+    appStore.showError(extractApiErrorMessage(error) || t("common.error"));
+  }
+}
+
+async function saveMaskingConfig() {
+  maskingSaving.value = true;
+  try {
+    applyMaskingView(await adminAPI.masking.updateConfig(buildMaskingConfig() as any));
+    appStore.showSuccess(t("admin.settings.features.masking.saved"));
+  } catch (error) {
+    appStore.showError(extractApiErrorMessage(error) || t("common.error"));
+  } finally {
+    maskingSaving.value = false;
+  }
+}
+
+async function runMaskingPreview() {
+  if (!maskingPreview.input.trim()) return;
+  maskingPreview.running = true;
+  try {
+    const result = await adminAPI.masking.preview(maskingPreview.input, buildMaskingConfig() as any);
+    maskingPreview.output = result.masked;
+    maskingPreview.hits = result.hits;
+    maskingPreview.kinds = result.kinds || [];
+  } catch (error) {
+    appStore.showError(extractApiErrorMessage(error) || t("common.error"));
+  } finally {
+    maskingPreview.running = false;
+  }
+}
 const loadFailed = ref(false);
 const saving = ref(false);
 const testingSmtp = ref(false);
@@ -12899,6 +13090,7 @@ onMounted(() => {
   loadRectifierSettings();
   loadBetaPolicySettings();
   loadProviders();
+  loadMaskingConfig();
 });
 
 // =========================
