@@ -1229,3 +1229,11 @@ func mergePlatformQuotaDefaults(dst, src *DefaultPlatformQuotaSetting) {
 		dst.MonthlyLimitUSD = src.MonthlyLimitUSD
 	}
 }
+
+// GetRawValue 读取任意 settings 键的原始值，供自管配置的垂直模块使用。
+func (s *SettingService) GetRawValue(ctx context.Context, key string) (string, error) {
+	if s == nil || s.settingRepo == nil {
+		return "", nil
+	}
+	return s.settingRepo.GetValue(ctx, key)
+}
