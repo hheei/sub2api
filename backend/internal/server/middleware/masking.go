@@ -52,6 +52,13 @@ func Masking(masker *masking.Masker) gin.HandlerFunc {
 			return
 		}
 		requestmodel.ResetRequestBody(c.Request, masked)
+		logger.FromContext(c.Request.Context()).Info("masking.request.rewritten",
+			zap.Int("hits", hits),
+			zap.Int("placeholders", registry.Len()),
+			zap.Bool("notice", noticeInjected),
+			zap.Bool("tagger", cfg.TaggingEnabled()),
+			zap.String("path", c.FullPath()),
+		)
 		if registry.Len() == 0 {
 			c.Next()
 			return
@@ -62,9 +69,11 @@ func Masking(masker *masking.Masker) gin.HandlerFunc {
 		c.Writer.Header().Del("Content-Length")
 		defer writer.Finish()
 
-		logger.FromContext(c.Request.Context()).Debug("masking.request.masked",
+		logger.FromContext(c.Request.Context()).Info("masking.request.masked",
 			zap.Int("hits", hits),
 			zap.Int("placeholders", registry.Len()),
+			zap.Bool("notice", noticeInjected),
+			zap.Bool("tagger", cfg.TaggingEnabled()),
 			zap.String("path", c.FullPath()),
 		)
 		c.Next()
