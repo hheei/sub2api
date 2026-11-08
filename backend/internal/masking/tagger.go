@@ -60,7 +60,7 @@ func (t *taggerClient) tag(ctx context.Context, cfg *Config, text string) []span
 	}
 	spans, err := t.call(ctx, cfg, text)
 	if err != nil {
-		logger.FromContext(ctx).Debug("masking.tagger.failed", zap.Error(err))
+		logger.FromContext(ctx).Warn("masking.tagger.failed", zap.Error(err))
 		t.store(key, nil)
 		return nil
 	}
