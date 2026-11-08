@@ -199,6 +199,10 @@ func validatedSpans(text string, spans []span) []span {
 		if !strings.Contains(text, fragment) {
 			continue
 		}
+		if kind == string(KindPerson) && looksLikeTemporalOrNumeric(fragment) {
+			// 模型会把"明天下午三点"这类时间短语标成 PERSON；脱掉会丢上下文。
+			continue
+		}
 		key := kind + "\x00" + fragment
 		if _, ok := seen[key]; ok {
 			continue
@@ -207,6 +211,24 @@ func validatedSpans(text string, spans []span) []span {
 		out = append(out, span{Kind: kind, Text: fragment})
 	}
 	return out
+}
+
+// temporalWords 是中文时间短语里最常见的词根；命中即认为不是人名。
+var temporalWords = []string{"今天", "明天", "后天", "昨天", "上午", "下午", "中午",
+	"晚上", "下周", "上周", "本周", "点", "号", "月份", "年底"}
+
+func looksLikeTemporalOrNumeric(fragment string) bool {
+	for _, word := range temporalWords {
+		if strings.Contains(fragment, word) {
+			return true
+		}
+	}
+	for _, r := range fragment {
+		if r >= '0' && r <= '9' {
+			return true
+		}
+	}
+	return false
 }
 
 func cacheKey(model, text string) string {
