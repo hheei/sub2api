@@ -9,15 +9,15 @@ import (
 
 func TestProtocolForPath(t *testing.T) {
 	cases := map[string]Protocol{
-		"/v1/messages":                          ProtocolAnthropic,
-		"/antigravity/v1/messages":              ProtocolAnthropic,
-		"/v1/chat/completions":                  ProtocolChat,
-		"/v1/responses":                         ProtocolResponses,
-		"/backend-api/codex/responses":          ProtocolResponses,
-		"/v1beta/models/gemini-3:generateContent": ProtocolGemini,
+		"/v1/messages":                                       ProtocolAnthropic,
+		"/antigravity/v1/messages":                           ProtocolAnthropic,
+		"/v1/chat/completions":                               ProtocolChat,
+		"/v1/responses":                                      ProtocolResponses,
+		"/backend-api/codex/responses":                       ProtocolResponses,
+		"/v1beta/models/gemini-3:generateContent":            ProtocolGemini,
 		"/antigravity/v1beta/models/x:streamGenerateContent": ProtocolGemini,
-		"/v1/alpha/search":                      ProtocolUnknown,
-		"/v1beta/cachedContents":                ProtocolSkip,
+		"/v1/alpha/search":                                   ProtocolUnknown,
+		"/v1beta/cachedContents":                             ProtocolSkip,
 	}
 	for path, want := range cases {
 		if got := ProtocolForPath(path); got != want {
@@ -169,4 +169,21 @@ func gjsonString(t *testing.T, body []byte, path string) string {
 func gjsonArrayLen(t *testing.T, body []byte, path string) []gjson.Result {
 	t.Helper()
 	return gjson.GetBytes(body, path).Array()
+}
+
+func TestValidatedSpansDropsTemporalPERSON(t *testing.T) {
+	text := "明天下午三点提醒我开会，客户张伟在建国路 88 号下单"
+	spans := validatedSpans(text, []span{
+		{Kind: "PERSON", Text: "明天下午三点"},
+		{Kind: "PERSON", Text: "张伟"},
+		{Kind: "ADDRESS", Text: "建国路 88 号"},
+	})
+	if len(spans) != 2 {
+		t.Fatalf("unexpected spans: %+v", spans)
+	}
+	for _, item := range spans {
+		if item.Text == "明天下午三点" {
+			t.Fatalf("temporal phrase must not be masked: %+v", spans)
+		}
+	}
 }
