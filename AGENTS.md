@@ -9,7 +9,7 @@ This document defines core rules, architectural guidelines, and workflows for AI
 - **Upstream Repository**: `Wei-Shaw/sub2api`
 - **Current Fork**: `hheei/sub2api`
 - **Production Host**: `tencent-kr` (`/home/ubuntu/sub2api`)
-- **Docker Image**: `ghcr.io/hheei/sub2api:latest` / `ghcr.io/hheei/sub2api:<version>`
+- **Docker Image**: `ghcr.io/hheei/sub2api:latest` / `ghcr.io/hheei/sub2api:<version>`（镜像名保留，但**不再由 GitHub Actions 构建**）
 - **Version Convention**: `X.Y.Z-lo.N` (e.g., `0.2.17-lo.1`, defined in `backend/cmd/server/VERSION`)
 
 ### Key Fork Features
@@ -19,8 +19,9 @@ This document defines core rules, architectural guidelines, and workflows for AI
    - Usage log records dynamic snapshot with `DYN` tag.
    - Model Plaza reflects localized dynamic group pricing.
 2. **One-Click Deploy Script**:
-   - Location: `scripts/deploy.sh`, `Makefile` (`./scripts/deploy.sh`)
-   - Synchronizes git tag, runs CI release workflow on GHCR, SSHs to `tencent-kr`, updates container, checks health.
+   - Location: `scripts/deploy-local.sh`（主路径）
+   - 本地 `docker build`（容器内完成前端构建 + `CGO_ENABLED=0` 交叉编译）→ 镜像经 ssh 送到 `tencent-kr` 并 `docker compose up -d --pull never` → 健康检查。全程不依赖 GitHub Actions 或任何 registry。
+   - `scripts/deploy.sh`（CI 版本）保留但**仓库 Actions 已关闭**，除非重新启用否则不要用。
 
 ---
 
@@ -106,15 +107,23 @@ When synchronizing with upstream `Wei-Shaw/sub2api`:
 Deploying updates to the production server (`tencent-kr`):
 
 ```bash
-# One-click deployment
-make deploy
+# One-click deployment (local build, no CI)
+./scripts/deploy-local.sh
+
+# 只出镜像并部署，不动 git
+SKIP_GIT=1 ./scripts/deploy-local.sh
+
+# 备选：推 GHCR（需要 token 有 write:packages）
+MODE=registry ./scripts/deploy-local.sh
 ```
 
-What `scripts/deploy.sh` does:
-1. Pushes `main` and `v<VERSION>` to GitHub.
-2. Triggers the GitHub Actions `Release` workflow and watches until GHCR image is published.
-3. Connects via SSH to `tencent-kr` and runs `docker compose pull sub2api && docker compose up -d sub2api`.
-4. Polls `http://127.0.0.1:8080/health` until healthy.
+What `scripts/deploy-local.sh` does:
+1. `docker build`：镜像内先构建前端，再 `CGO_ENABLED=0 GOARCH=$TARGETARCH go build -tags embed` 交叉编译后端，版本信息由 `VERSION`/`COMMIT`/`DATE` 注入。
+2. ssh 模式（默认）：`docker save | gzip | ssh tencent-kr 'gunzip | docker load'`，然后 `docker compose up -d --pull never sub2api`——服务端不需要 registry 凭据。
+3. `MODE=registry` 时改为 push 到 GHCR，再 `docker compose pull/up`。
+4. 打 tag（`SKIP_GIT=1` 可跳过）、健康检查、打印容器状态与镜像创建时间。
+
+> **仓库的 GitHub Actions 目前是关闭的**（`gh api repos/hheei/sub2api/actions/permissions` → `enabled:false`）。`scripts/deploy.sh` 走 CI，只有重新启用 Actions 后才有意义。
 
 ---
 
