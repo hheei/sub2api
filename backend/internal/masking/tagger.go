@@ -17,10 +17,13 @@ import (
 )
 
 const (
-	taggerMinRunes   = 4
-	taggerMaxRunes   = 2000
-	taggerCacheLimit = 2048
-	taggerCacheTTL   = 10 * time.Minute
+	taggerMinRunes = 4
+	// taggerMinSpanRunes 是采信模型片段的最小长度：中文人名/地名 2-3 个字很常见，
+	// 规则层不需要这条，只对标记模型放开。
+	taggerMinSpanRunes = 2
+	taggerMaxRunes     = 2000
+	taggerCacheLimit   = 2048
+	taggerCacheTTL     = 10 * time.Minute
 )
 
 // taggerPrompt 照 magpie 的本机小模型思路：只做"标记"，不改写、不解释。
@@ -190,7 +193,7 @@ func validatedSpans(text string, spans []span) []span {
 		if _, ok := allowed[kind]; !ok {
 			continue
 		}
-		if utf8.RuneCountInString(fragment) < taggerMinRunes || IsPlaceholder(fragment) {
+		if utf8.RuneCountInString(fragment) < taggerMinSpanRunes || IsPlaceholder(fragment) {
 			continue
 		}
 		if !strings.Contains(text, fragment) {
