@@ -129,10 +129,21 @@ func (c *Config) Allowed(value string) bool {
 	return ok
 }
 
-// TaggingEnabled 表示是否需要调用标记模型。
+// TaggingEnabled 表示是否需要调用标记模型。模型层负责的 kind 全被关掉时，
+// 不再为每个文本字段白跑一次推理。
 func (c *Config) TaggingEnabled() bool {
-	return c.Enabled && c.Mode == ModeRulesAndModel &&
-		strings.TrimSpace(c.Tagger.BaseURL) != "" && strings.TrimSpace(c.Tagger.Model) != ""
+	if !c.Enabled || c.Mode != ModeRulesAndModel {
+		return false
+	}
+	if strings.TrimSpace(c.Tagger.BaseURL) == "" || strings.TrimSpace(c.Tagger.Model) == "" {
+		return false
+	}
+	for _, kind := range modelKinds {
+		if c.Action(kind) != ActionOff {
+			return true
+		}
+	}
+	return false
 }
 
 // SettingsReader 只需要 settings 的读取能力。

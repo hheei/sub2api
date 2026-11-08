@@ -187,3 +187,17 @@ func TestValidatedSpansDropsTemporalPERSON(t *testing.T) {
 		}
 	}
 }
+
+func TestTaggingDisabledWhenAllModelKindsOff(t *testing.T) {
+	cfg := ParseConfig(`{"enabled":true,"mode":"rules+tagger","actions":{"PERSON":"off","ADDRESS":"off","ACCOUNT":"off"},"tagger":{"base_url":"http://127.0.0.1:1","model":"m"}}`)
+	if cfg.TaggingEnabled() {
+		t.Fatalf("tagger must not run when every model kind is off")
+	}
+	partial := ParseConfig(`{"enabled":true,"mode":"rules+tagger","actions":{"PERSON":"off","ADDRESS":"off"},"tagger":{"base_url":"http://127.0.0.1:1","model":"m"}}`)
+	if !partial.TaggingEnabled() {
+		t.Fatalf("tagger must still run for the remaining kinds")
+	}
+	if partial.Action(KindPerson) != ActionOff || partial.Action(KindAddress) != ActionOff {
+		t.Fatalf("action override not honoured: %+v", partial.Actions)
+	}
+}
