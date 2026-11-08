@@ -21,7 +21,7 @@ This document defines core rules, architectural guidelines, and workflows for AI
 2. **One-Click Deploy Script**:
    - Location: `scripts/deploy-local.sh`（主路径）
    - 本地 `docker build`（容器内完成前端构建 + `CGO_ENABLED=0` 交叉编译）→ 镜像经 ssh 送到 `tencent-kr` 并 `docker compose up -d --pull never` → 健康检查。全程不依赖 GitHub Actions 或任何 registry。
-   - `scripts/deploy.sh`（CI 版本）保留但**仓库 Actions 已关闭**，除非重新启用否则不要用。
+   - CI 版部署脚本已删除；**仓库 Actions 已关闭**，`.github/workflows/release.yml` 保留但不再触发（上游跟踪的文件，删掉每次 rebase 都要处理冲突）。
 
 ---
 
@@ -123,7 +123,7 @@ What `scripts/deploy-local.sh` does:
 3. `MODE=registry` 时改为 push 到 GHCR，再 `docker compose pull/up`。
 4. 打 tag（`SKIP_GIT=1` 可跳过）、健康检查、打印容器状态与镜像创建时间。
 
-> **仓库的 GitHub Actions 目前是关闭的**（`gh api repos/hheei/sub2api/actions/permissions` → `enabled:false`）。`scripts/deploy.sh` 走 CI，只有重新启用 Actions 后才有意义。
+> **仓库的 GitHub Actions 目前是关闭的**（`gh api repos/hheei/sub2api/actions/permissions` → `enabled:false`）。没有 CI 发版路径，唯一发布方式是 `./scripts/deploy-local.sh`。
 
 ---
 

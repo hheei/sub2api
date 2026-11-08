@@ -34,7 +34,7 @@ This repository is maintained by [@hheei](https://github.com/hheei) with the fol
 - **Dynamic Rate Expressions**: User groups support dynamic mathematical and conditional rate multiplier expressions (evaluated safely at request time).
 - **Usage Snapshotting**: Request usage logs capture dynamic rate evaluation snapshots (`DYN` tag with actual computed multipliers).
 - **Model Plaza Dynamic Pricing**: Plaza pricing seamlessly reflects and localizes group dynamic rate expressions.
-- **One-Click Remote Deployment**: Simple, automated deployment to remote production (`tencent-kr`) via `./scripts/deploy.sh`.
+- **One-Click Remote Deployment**: Local build (container does the frontend build and pure-Go cross-compile) shipped straight to the production host (`tencent-kr`) via `./scripts/deploy-local.sh` — no CI, no registry required.
 
 
 Sub2API is an AI API gateway platform designed to distribute and manage API quotas from AI product subscriptions. Users can access upstream AI services through platform-generated API Keys, while the platform handles authentication, billing, load balancing, and request forwarding.
