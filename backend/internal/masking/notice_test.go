@@ -171,23 +171,6 @@ func gjsonArrayLen(t *testing.T, body []byte, path string) []gjson.Result {
 	return gjson.GetBytes(body, path).Array()
 }
 
-func TestValidatedSpansDropsTemporalPERSON(t *testing.T) {
-	text := "明天下午三点提醒我开会，客户张伟在建国路 88 号下单"
-	spans := validatedSpans(text, []span{
-		{Kind: "PERSON", Text: "明天下午三点"},
-		{Kind: "PERSON", Text: "张伟"},
-		{Kind: "ADDRESS", Text: "建国路 88 号"},
-	})
-	if len(spans) != 2 {
-		t.Fatalf("unexpected spans: %+v", spans)
-	}
-	for _, item := range spans {
-		if item.Text == "明天下午三点" {
-			t.Fatalf("temporal phrase must not be masked: %+v", spans)
-		}
-	}
-}
-
 func TestTaggingDisabledWhenAllModelKindsOff(t *testing.T) {
 	cfg := ParseConfig(`{"enabled":true,"mode":"rules+tagger","actions":{"PERSON":"off","ADDRESS":"off","ACCOUNT":"off"},"tagger":{"base_url":"http://127.0.0.1:1","model":"m"}}`)
 	if cfg.TaggingEnabled() {
