@@ -1237,3 +1237,11 @@ func (s *SettingService) GetRawValue(ctx context.Context, key string) (string, e
 	}
 	return s.settingRepo.GetValue(ctx, key)
 }
+
+// SetRawValue 写入任意 settings 键的原始值，供自管配置的垂直模块使用。
+func (s *SettingService) SetRawValue(ctx context.Context, key, value string) error {
+	if s == nil || s.settingRepo == nil {
+		return nil
+	}
+	return s.settingRepo.Set(ctx, key, value)
+}
