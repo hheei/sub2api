@@ -2,6 +2,9 @@
 /docs-local/
 .codex
 
+# 部署脚本产物（scripts/deploy-safe.sh 的运行日志）
+.deploy/
+
 # ===================
 # Go 后端
 # ===================
@@ -124,6 +127,9 @@ CLAUDE.md
 scripts
 !backend/scripts/
 !backend/scripts/resolve-version.sh
+# 本 fork 的部署脚本要进版控（上游忽略了整个 scripts/）
+!/scripts/
+!/scripts/**
 .code-review-state
 #openspec/
 code-reviews/
